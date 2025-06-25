@@ -3,17 +3,18 @@
 import discord
 from discord.ext import commands
 from discord import app_commands
-from dotenv import load_dotenv
 import random
 import datetime
 import requests
 import math
 import json
 import os
-
+from dotenv import load_dotenv
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
+
+print("🔍 토큰 값:", repr(token))
 
 
 intents = discord.Intents.default()
