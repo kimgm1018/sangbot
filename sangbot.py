@@ -10,6 +10,8 @@ import math
 import json
 import os
 
+
+load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 
 
