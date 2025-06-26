@@ -228,21 +228,17 @@ async def 익명(interaction: discord.Interaction, 내용: str):
 
 
 # 이벤트 & 지각 관리
-XP_FILE = "events.json"
-
-intents = discord.Intents.default()
-intents.message_content = True
-bot = commands.Bot(command_prefix="!", intents=intents)
+EVENT_FILE = "events.json"
 
 # Load and save functions for events data
 def load_events():
-    if os.path.exists(XP_FILE):
-        with open(XP_FILE, "r") as f:
+    if os.path.exists(EVENT_FILE):
+        with open(EVENT_FILE, "r") as f:
             return json.load(f)
     return {}
 
 def save_events(data):
-    with open(XP_FILE, "w") as f:
+    with open(EVENT_FILE, "w") as f:
         json.dump(data, f, indent=4)
 
 events = load_events()
