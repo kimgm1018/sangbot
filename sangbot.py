@@ -282,6 +282,19 @@ async def 일정목록(interaction: discord.Interaction):
         embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
     await interaction.response.send_message(embed=embed)
 
+# 일정 삭제
+@bot.tree.command(name="일정삭제", description="특정 일정을 삭제합니다")
+@app_commands.describe(시간="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
+async def 일정삭제(interaction: discord.Interaction, 시간: str):
+    if 시간 not in events:
+        await interaction.response.send_message("❗ 해당 일정이 존재하지 않습니다.", ephemeral=True)
+        return
+
+    title = events[시간]["title"]
+    del events[시간]
+    save_events(events)
+    await interaction.response.send_message(f"🗑️ `{title}` 일정이 삭제되었습니다.")
+
 # 출석 체크
 @bot.tree.command(name="출석", description="출석을 체크합니다")
 async def 출석(interaction: discord.Interaction):
@@ -350,9 +363,44 @@ async def 지각왕(interaction: discord.Interaction):
 
     top_uid = max(delay_counts, key=delay_counts.get)
     top_user = await bot.fetch_user(int(top_uid))
-    await interaction.response.send_message(
-        f"👑 현재 지각왕은 {top_user.mention} ({delay_counts[top_uid]}회 지각)입니다!\n총 누적 지각 시간: {total_delays[top_uid]:.1f}분"
+
+    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
+    embed.add_field(name="이름", value=top_user.display_name, inline=True)
+    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+
+    await interaction.response.send_message(embed=embed)
+
+# 출석률
+@bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
+@app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
+async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
+    user = 대상 or interaction.user
+    uid = str(user.id)
+
+    참여수 = 0
+    출석수 = 0
+
+    for data in events.values():
+        if int(uid) in data.get("participants", []):
+            참여수 += 1
+            if uid in data.get("attendance", {}):
+                출석수 += 1
+
+    embed = discord.Embed(
+        title=f"📊 {user.display_name} 님의 출석률",
+        color=discord.Color.green() if 참여수 else discord.Color.greyple()
     )
+
+    if 참여수 == 0:
+        embed.description = "참여한 일정이 없습니다."
+    else:
+        rate = (출석수 / 참여수) * 100
+        embed.add_field(name="✅ 총 참여 일정 수", value=f"{참여수}회", inline=True)
+        embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
+        embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
+
+    await interaction.response.send_message(embed=embed)
 
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
