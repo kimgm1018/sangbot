@@ -265,42 +265,46 @@ async def check_events():
 
 
 # 일정추가
-@bot.tree.command(name="일정추가", description="일정을 추가합니다")
-@app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
-async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
-    print("[디버그] 일정추가 명령어 실행됨")
-    try:
-        await interaction.response.defer(thinking=False)
-        print("[디버그] defer 성공")
-    except Exception as e:
-        print(f"[에러] defer 실패: {e}")
-        return
+class ScheduleModal(discord.ui.Modal, title="일정 추가"):
+    title_input = discord.ui.TextInput(label="일정 제목", placeholder="예: 팀 회의", max_length=50)
+    time_input = discord.ui.TextInput(label="시작 시간 (YYYY-MM-DD HH:MM)", placeholder="2025-07-01 15:00")
+    participants_input = discord.ui.TextInput(label="참여자 멘션들", placeholder="@사용자1 @사용자2")
 
-    try:
-        dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
-        print("[디버그] 시간 파싱 성공:", dt)
-    except ValueError:
-        await interaction.followup.send("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
-        return
+    async def on_submit(self, interaction: discord.Interaction):
+        title = self.title_input.value
+        time_str = self.time_input.value
+        participants_raw = self.participants_input.value
 
-    try:
-        uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
-        print("[디버그] 참여자 파싱 성공:", uids)
-    except Exception as e:
-        print(f"[에러] 참여자 파싱 실패: {e}")
-        await interaction.followup.send("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
-        return
+        print("[디버그] 입력받은 시간:", time_str)
+        print("[디버그] 입력받은 멘션들:", participants_raw)
 
-    events[time] = {
-        "title": title,
-        "participants": uids,
-        "channel_id": interaction.channel_id,
-        "notified": {"30": False, "10": False, "0": False},
-        "attendance": {}
-    }
-    save_events(events)
-    print(f"[디버그] 이벤트 저장 성공: {title} at {time}")
-    await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            await interaction.response.send_message("❗ 시간 형식이 잘못되었습니다. 예: 2025-07-01 15:00", ephemeral=True)
+            return
+
+        try:
+            uids = [int(user_id.strip("<@!>")) for user_id in participants_raw.split()]
+        except Exception:
+            await interaction.response.send_message("❗ 참여자 형식이 잘못되었습니다. 멘션을 정확히 입력해주세요.", ephemeral=True)
+            return
+
+        events[time_str] = {
+            "title": title,
+            "participants": uids,
+            "channel_id": interaction.channel_id,
+            "notified": {"30": False, "10": False, "0": False},
+            "attendance": {}
+        }
+
+        save_events(events)
+        await interaction.response.send_message(f"✅ `{title}` 일정이 성공적으로 등록되었습니다!", ephemeral=True)
+
+@bot.tree.command(name="일정추가", description="모달을 이용하여 일정을 추가합니다")
+async def 일정추가(interaction: discord.Interaction):
+    await interaction.response.send_modal(ScheduleModal())
+
 
 
 # 일정 목록 확인
