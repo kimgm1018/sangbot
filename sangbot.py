@@ -307,21 +307,29 @@ async def 일정추가(interaction: discord.Interaction, title: str, time: str, 
 @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
 async def 일정목록(interaction: discord.Interaction):
     try:
-        await interaction.response.defer(thinking=False)
+        # 1. 우선 응답 (ephemeral 메시지)
+        await interaction.response.send_message("🔄 [디버그] 일정 목록을 불러오는 중입니다...", ephemeral=True)
+        print("[디버그] 일정목록 명령어 실행됨")
+
+        if not events:
+            print("[디버그] 이벤트 목록이 비어 있음")
+            await interaction.followup.send("📭 예정된 일정이 없습니다.")
+            return
+
+        embed = discord.Embed(title="📅 예정된 일정 목록", color=discord.Color.blue())
+        for time_str, data in sorted(events.items()):
+            users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
+            embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
+
+        print("[디버그] 일정 embed 생성 완료")
+        await interaction.followup.send(embed=embed)
+
     except Exception as e:
-        print(f"[에러] 일정목록 defer 실패: {e}")
-        return
-
-    if not events:
-        await interaction.followup.send("📭 예정된 일정이 없습니다.")
-        return
-
-    embed = discord.Embed(title="📅 예정된 일정 목록", color=discord.Color.blue())
-    for time_str, data in sorted(events.items()):
-        users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
-        embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
-
-    await interaction.followup.send(embed=embed)
+        print(f"[에러] 일정목록 처리 중 예외 발생: {e}")
+        try:
+            await interaction.followup.send(f"❗ 오류가 발생했습니다: {e}")
+        except Exception as inner_e:
+            print(f"[에러] followup.send 실패: {inner_e}")
 
 # 일정삭제
 @bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
