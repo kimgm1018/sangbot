@@ -69,16 +69,6 @@ def save_data(data):
 xp_data = load_data()
 
 # ✅ 채팅 감지 → XP 누적
-@bot.event
-async def on_message(message):
-    if message.author.bot:
-        return
-    
-    uid = str(message.author.id)
-    xp_data[uid] = xp_data.get(uid, 0) + 10  # 메시지마다 10 XP
-    
-    save_data(xp_data)
-    await bot.process_commands(message)
 
 @bot.event
 async def on_message(message):
