@@ -236,16 +236,32 @@ events = load_events()
 # Schedule reminder check
 @tasks.loop(minutes=1)
 async def check_events():
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now()
     for time_str, data in events.items():
-        if not data.get("notified"):
-            event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-            if datetime.now() + timedelta(minutes=30) >= event_time:
-                channel = bot.get_channel(data["channel_id"])
-                mentions = ' '.join([f'<@{uid}>' for uid in data["participants"]])
-                await channel.send(f"🔔 **[30분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
-                data["notified"] = True
-                save_events(events)
+        event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+
+        # 초기화가 안 되어 있으면 새로 설정
+        if isinstance(data.get("notified"), bool) or "notified" not in data:
+            data["notified"] = {"30": False, "10": False, "0": False}
+
+        # 알림 대상 사용자
+        mentions = ' '.join([f'<@{uid}>' for uid in data.get("participants", [])])
+        channel = bot.get_channel(data["channel_id"])
+
+        # 30분 전
+        if not data["notified"]["30"] and now + timedelta(minutes=30) >= event_time:
+            await channel.send(f"🔔 **[30분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
+            data["notified"]["30"] = True
+
+        # 10분 전
+        if not data["notified"]["10"] and now + timedelta(minutes=10) >= event_time:
+            await channel.send(f"⏰ **[10분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
+            data["notified"]["10"] = True
+
+        # 시작 시
+        if not data["notified"]["0"] and now >= event_time:
+            await channel.send(f"🚀 **[일정 시작]** `{data['title']}` 일정이 시작되었습니다!\n{mentions}")
+            data["notified"]["0"] = True
 
 
 # 일정 추가
