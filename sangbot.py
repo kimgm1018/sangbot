@@ -268,38 +268,44 @@ async def check_events():
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
+    print("[디버그] 일정추가 명령어 실행됨")
+    
     try:
         await interaction.response.defer(thinking=True)
+        print("[디버그] defer 성공")
     except Exception as e:
-        print(f"❌ defer 실패: {e}")
+        print(f"[에러] defer 실패: {e}")
         return
 
-    # ⏰ 시간 파싱
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
-    except ValueError:
+        print(f"[디버그] 시간 파싱 성공: {dt}")
+    except ValueError as e:
+        print(f"[에러] 시간 파싱 실패: {e}")
         await interaction.followup.send("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
         return
 
-    # 👥 참여자 파싱
     try:
         uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
-    except Exception:
+        print(f"[디버그] 참여자 파싱 성공: {uids}")
+    except Exception as e:
+        print(f"[에러] 참여자 파싱 실패: {e}")
         await interaction.followup.send("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
         return
 
-    # 📅 이벤트 저장
-    events[time] = {
-        "title": title,
-        "participants": uids,
-        "channel_id": interaction.channel_id,
-        "notified": {"30": False, "10": False, "0": False},
-        "attendance": {}
-    }
-    save_events(events)
-
-    # ✅ 응답
-    await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
+    try:
+        events[time] = {
+            "title": title,
+            "participants": uids,
+            "channel_id": interaction.channel_id,
+            "notified": {"30": False, "10": False, "0": False},
+            "attendance": {}
+        }
+        save_events(events)
+        print(f"[디버그] 이벤트 저장 성공: {title} at {time}")
+        await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
+    except Exception as e:
+        print(f"[에러] 일정 저장 또는 응답 실패: {e}")
 
 
 # 일정 목록 확인
