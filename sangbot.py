@@ -268,7 +268,14 @@ async def check_events():
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
-    await interaction.response.defer(thinking=False)
+    print(f"🔍 interaction.is_expired: {interaction.is_expired()}")
+    print(f"🔍 interaction.response.is_done(): {interaction.response.is_done()}")
+
+    try:
+        await interaction.response.defer(thinking=False)
+    except discord.errors.NotFound:
+        print("❗ interaction이 이미 만료되어 응답할 수 없습니다.")
+        return
 
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
