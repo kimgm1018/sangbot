@@ -261,15 +261,6 @@ async def check_events():
                 data["notified"] = True
                 save_events(events)
 
-@bot.event
-async def on_ready():
-    print(f"{bot.user} online")
-    try:
-        synced = await bot.tree.sync()
-        print(f"Slash commands synced: {len(synced)}")
-    except Exception as e:
-        print(e)
-    check_events.start()
 
 # 일정 추가
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
@@ -381,9 +372,13 @@ async def 지각왕(interaction: discord.Interaction):
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
 async def on_ready():
-    synced = await bot.tree.sync()
-    print(f"✅ 등록된 명령어: {[cmd.name for cmd in synced]}")
-    print(f"✅ 로그인: {bot.user}")
+    print(f"{bot.user} online")
+    try:
+        synced = await bot.tree.sync()
+        print(f"✅ 등록된 명령어: {[cmd.name for cmd in synced]}")
+    except Exception as e:
+        print("명령어 등록 실패:", e)
+    check_events.start()
 
 bot.run(token)
 
