@@ -268,26 +268,27 @@ async def check_events():
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
-    # 🔍 interaction 응답 가능 여부 확인
-    if interaction.is_expired():
-        print(f"⚠️ 인터랙션이 만료되어 응답할 수 없습니다: {interaction.id}")
+    try:
+        await interaction.response.defer(thinking=True)
+    except Exception as e:
+        print(f"❌ defer 실패: {e}")
         return
 
-    # 🔧 시간 파싱
+    # ⏰ 시간 파싱
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
     except ValueError:
-        await interaction.response.send_message("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
+        await interaction.followup.send("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
         return
 
-    # 🔧 참여자 파싱
+    # 👥 참여자 파싱
     try:
         uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
     except Exception:
-        await interaction.response.send_message("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
+        await interaction.followup.send("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
         return
 
-    # 📝 이벤트 저장
+    # 📅 이벤트 저장
     events[time] = {
         "title": title,
         "participants": uids,
@@ -297,12 +298,8 @@ async def 일정추가(interaction: discord.Interaction, title: str, time: str, 
     }
     save_events(events)
 
-    # ✅ 완료 메시지
-    try:
-        await interaction.response.send_message(f"✅ `{title}` 일정이 등록되었습니다.")
-    except Exception as e:
-        print(f"❌ 응답 실패: {e}")
-
+    # ✅ 응답
+    await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
 
 
 # 일정 목록 확인
