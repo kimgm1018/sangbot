@@ -485,7 +485,7 @@ async def on_ready():
         print(f"✅ 등록된 명령어: {[cmd.name for cmd in synced]}")
     except Exception as e:
         print("명령어 등록 실패:", e)
-    check_events.start()
+    # check_events.start()
 
 bot.run(token)
 
