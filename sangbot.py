@@ -264,26 +264,34 @@ async def check_events():
             data["notified"]["0"] = True
 
 
-# 일정 추가
+# 일정추가
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
+    await interaction.response.defer(thinking=False)
+
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
     except ValueError:
-        await interaction.response.send_message("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
+        await interaction.followup.send("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
         return
 
-    uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
+    try:
+        uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
+    except Exception:
+        await interaction.followup.send("❗ 멘션 형식이 잘못되었습니다.", ephemeral=True)
+        return
+
     events[time] = {
         "title": title,
         "participants": uids,
         "channel_id": interaction.channel_id,
-        "notified": False,
+        "notified": {"30": False, "10": False, "0": False},
         "attendance": {}
     }
     save_events(events)
-    await interaction.response.send_message(f"✅ `{title}` 일정이 등록되었습니다.")
+
+    await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
 
 # 일정 목록 확인
 @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
@@ -298,18 +306,19 @@ async def 일정목록(interaction: discord.Interaction):
         embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
     await interaction.response.send_message(embed=embed)
 
-# 일정 삭제
-@bot.tree.command(name="일정삭제", description="특정 일정을 삭제합니다")
-@app_commands.describe(시간="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
-async def 일정삭제(interaction: discord.Interaction, 시간: str):
-    if 시간 not in events:
-        await interaction.response.send_message("❗ 해당 일정이 존재하지 않습니다.", ephemeral=True)
+# 일정삭제
+@bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
+@app_commands.describe(time="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
+async def 일정삭제(interaction: discord.Interaction, time: str):
+    await interaction.response.defer(thinking=False)
+
+    if time not in events:
+        await interaction.followup.send("❗ 해당 시간에 등록된 일정이 없습니다.", ephemeral=True)
         return
 
-    title = events[시간]["title"]
-    del events[시간]
+    del events[time]
     save_events(events)
-    await interaction.response.send_message(f"🗑️ `{title}` 일정이 삭제되었습니다.")
+    await interaction.followup.send(f"🗑 `{time}` 일정이 삭제되었습니다.")
 
 # 출석 체크
 @bot.tree.command(name="출석", description="출석을 체크합니다")
@@ -391,6 +400,8 @@ async def 지각왕(interaction: discord.Interaction):
 @bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
 @app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
 async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
+    await interaction.response.defer(thinking=False)
+
     user = 대상 or interaction.user
     uid = str(user.id)
 
@@ -416,7 +427,7 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
         embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
         embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
