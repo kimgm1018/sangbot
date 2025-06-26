@@ -268,7 +268,7 @@ async def check_events():
 @bot.tree.command(name="일정추가", description="일정을 추가합니다")
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
-    await interaction.response.defer(thinking=False)  # 🔹 무조건 첫 줄에서 호출!
+    await interaction.response.defer(thinking=False)
 
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
@@ -279,7 +279,7 @@ async def 일정추가(interaction: discord.Interaction, title: str, time: str, 
     try:
         uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
     except Exception:
-        await interaction.followup.send("❗ 참여자 형식이 올바르지 않습니다. @멘션들을 공백으로 구분해주세요.", ephemeral=True)
+        await interaction.followup.send("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
         return
 
     events[time] = {
@@ -293,18 +293,22 @@ async def 일정추가(interaction: discord.Interaction, title: str, time: str, 
     await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
 
 
+
 # 일정 목록 확인
 @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
 async def 일정목록(interaction: discord.Interaction):
+    await interaction.response.defer(thinking=False)  # 🔹 첫 줄에서 바로 호출
+
     if not events:
-        await interaction.response.send_message("📭 예정된 일정이 없습니다.")
+        await interaction.followup.send("📭 예정된 일정이 없습니다.")
         return
 
     embed = discord.Embed(title="📅 예정된 일정 목록", color=discord.Color.blue())
     for time_str, data in sorted(events.items()):
         users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
         embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
-    await interaction.response.send_message(embed=embed)
+
+    await interaction.followup.send(embed=embed)
 
 # 일정삭제
 @bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
