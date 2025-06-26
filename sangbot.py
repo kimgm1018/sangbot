@@ -269,9 +269,8 @@ async def check_events():
 @app_commands.describe(title="일정 제목", time="시작 시간 (YYYY-MM-DD HH:MM)", participants="참여자 멘션 공백구분")
 async def 일정추가(interaction: discord.Interaction, title: str, time: str, participants: str):
     print("[디버그] 일정추가 명령어 실행됨")
-    
     try:
-        await interaction.response.defer(thinking=True)
+        await interaction.response.defer(thinking=False)
         print("[디버그] defer 성공")
     except Exception as e:
         print(f"[에러] defer 실패: {e}")
@@ -279,39 +278,39 @@ async def 일정추가(interaction: discord.Interaction, title: str, time: str, 
 
     try:
         dt = datetime.strptime(time, "%Y-%m-%d %H:%M")
-        print(f"[디버그] 시간 파싱 성공: {dt}")
-    except ValueError as e:
-        print(f"[에러] 시간 파싱 실패: {e}")
+        print("[디버그] 시간 파싱 성공:", dt)
+    except ValueError:
         await interaction.followup.send("❗ 시간 형식이 올바르지 않습니다. (예: 2025-07-01 15:00)", ephemeral=True)
         return
 
     try:
         uids = [int(user_id.strip("<@!>")) for user_id in participants.split()]
-        print(f"[디버그] 참여자 파싱 성공: {uids}")
+        print("[디버그] 참여자 파싱 성공:", uids)
     except Exception as e:
         print(f"[에러] 참여자 파싱 실패: {e}")
         await interaction.followup.send("❗ 참여자 형식이 잘못되었습니다.", ephemeral=True)
         return
 
-    try:
-        events[time] = {
-            "title": title,
-            "participants": uids,
-            "channel_id": interaction.channel_id,
-            "notified": {"30": False, "10": False, "0": False},
-            "attendance": {}
-        }
-        save_events(events)
-        print(f"[디버그] 이벤트 저장 성공: {title} at {time}")
-        await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
-    except Exception as e:
-        print(f"[에러] 일정 저장 또는 응답 실패: {e}")
+    events[time] = {
+        "title": title,
+        "participants": uids,
+        "channel_id": interaction.channel_id,
+        "notified": {"30": False, "10": False, "0": False},
+        "attendance": {}
+    }
+    save_events(events)
+    print(f"[디버그] 이벤트 저장 성공: {title} at {time}")
+    await interaction.followup.send(f"✅ `{title}` 일정이 등록되었습니다.")
 
 
 # 일정 목록 확인
 @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
 async def 일정목록(interaction: discord.Interaction):
-    await interaction.response.defer(thinking=False)  # 🔹 첫 줄에서 바로 호출
+    try:
+        await interaction.response.defer(thinking=False)
+    except Exception as e:
+        print(f"[에러] 일정목록 defer 실패: {e}")
+        return
 
     if not events:
         await interaction.followup.send("📭 예정된 일정이 없습니다.")
@@ -328,7 +327,11 @@ async def 일정목록(interaction: discord.Interaction):
 @bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
 @app_commands.describe(time="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
 async def 일정삭제(interaction: discord.Interaction, time: str):
-    await interaction.response.defer(thinking=False)
+    try:
+        await interaction.response.defer(thinking=False)
+    except Exception as e:
+        print(f"[에러] 일정삭제 defer 실패: {e}")
+        return
 
     if time not in events:
         await interaction.followup.send("❗ 해당 시간에 등록된 일정이 없습니다.", ephemeral=True)
@@ -428,6 +431,12 @@ async def 지각왕(interaction: discord.Interaction):
 @bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
 @app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
 async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
+    try:
+        await interaction.response.defer(thinking=False)
+    except Exception as e:
+        print(f"[에러] 출석률 defer 실패: {e}")
+        return
+
     user = 대상 or interaction.user
     uid = str(user.id)
 
@@ -453,7 +462,7 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
         embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
         embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
 
-    await interaction.response.send_message(embed=embed)
+    await interaction.followup.send(embed=embed)
 
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
