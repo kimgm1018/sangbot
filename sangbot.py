@@ -400,12 +400,20 @@ async def 지각왕(interaction: discord.Interaction):
 
     await interaction.response.send_message(embed=embed)
 
+    top_uid = max(delay_counts, key=delay_counts.get)
+    top_user = await bot.fetch_user(int(top_uid))
+
+    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
+    embed.add_field(name="이름", value=top_user.display_name, inline=True)
+    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+
+    await interaction.response.send_message(embed=embed)
+
 # 출석률
 @bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
 @app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
 async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
-    await interaction.response.defer(thinking=False)
-
     user = 대상 or interaction.user
     uid = str(user.id)
 
@@ -431,7 +439,7 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
         embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
         embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
 
-    await interaction.followup.send(embed=embed)
+    await interaction.response.send_message(embed=embed)
 
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
