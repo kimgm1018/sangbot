@@ -262,7 +262,7 @@ async def check_events():
             data["notified"]["0"] = True
 
 
-# 일정추가
+# ✅ 일정 생성 (제목 + 시간만 모달로 받기)
 class ScheduleCreateModal(discord.ui.Modal, title="일정 생성"):
     title_input = discord.ui.TextInput(label="일정 제목")
     time_input = discord.ui.TextInput(label="시작 시간 (YYYY-MM-DD HH:MM)")
@@ -296,18 +296,33 @@ async def 일정추가(interaction: discord.Interaction):
     await interaction.response.send_modal(ScheduleCreateModal())
 
 
-# ✅ 일정 참여 (유저 드롭다운으로 추가)
-class ParticipantSelectView(discord.ui.View):
-    def __init__(self, time_str: str):
-        super().__init__(timeout=60)
-        self.time_str = time_str
 
-    @discord.ui.user_select(placeholder="참여할 유저를 선택하세요", min_values=1, max_values=25)
-    async def select_users(self, interaction: discord.Interaction, select: discord.ui.UserSelect):
-        user_ids = [user.id for user in select.values]
-        events[self.time_str]["participants"] = user_ids
+# ✅ 일정 참여 (유저 드롭다운으로 추가)
+class ParticipantSelect(discord.ui.Select):
+    def __init__(self, time_str: str):
+        self.time_str = time_str
+        options = [
+            discord.SelectOption(label=member.display_name, value=str(member.id))
+            for member in interaction.guild.members if not member.bot
+        ][:25]  # 최대 25명까지 제한
+
+        super().__init__(
+            placeholder="참여할 유저를 선택하세요",
+            min_values=1,
+            max_values=min(25, len(options)),
+            options=options
+        )
+
+    async def callback(self, interaction: discord.Interaction):
+        selected_ids = [int(uid) for uid in self.values]
+        events[self.time_str]["participants"] = selected_ids
         save_events(events)
         await interaction.response.send_message("✅ 참여자가 성공적으로 등록되었습니다.", ephemeral=True)
+
+class ParticipantSelectView(discord.ui.View):
+    def __init__(self, time_str: str, interaction: discord.Interaction):
+        super().__init__(timeout=60)
+        self.add_item(ParticipantSelect(time_str))
 
 @bot.tree.command(name="일정참여", description="기존 일정에 유저를 추가합니다.")
 @app_commands.describe(시간="참여할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
@@ -316,8 +331,9 @@ async def 일정참여(interaction: discord.Interaction, 시간: str):
         await interaction.response.send_message("❗ 해당 시간의 일정이 없습니다.", ephemeral=True)
         return
 
-    view = ParticipantSelectView(시간)
+    view = ParticipantSelectView(시간, interaction)
     await interaction.response.send_message(f"💡 `{events[시간]['title']}` 일정에 참여할 유저를 선택하세요:", view=view, ephemeral=True)
+
 
 # 일정 목록 확인
 @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
