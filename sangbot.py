@@ -1,5 +1,3 @@
-# MTM4NzMzNzk3NjAwMjExNzY0Mg.Gx5TvA.VcqEmgxBEmvI4dn6x5L50ClqPh9JXas-qWSi8c
-
 import discord
 from discord.ext import commands, tasks
 from discord import app_commands
@@ -217,263 +215,283 @@ async def 익명(interaction: discord.Interaction, 내용: str):
     await interaction.response.send_message("✅ 익명 메시지가 전송되었습니다.", ephemeral=True)
 
 
-# # 이벤트 & 지각 관리
-# EVENT_FILE = "events.json"
+# 이벤트 & 지각 관리
+EVENT_FILE = "events.json"
 
-# # Load and save functions for events data
-# def load_events():
-#     if os.path.exists(EVENT_FILE):
-#         with open(EVENT_FILE, "r") as f:
-#             return json.load(f)
-#     return {}
+# Load and save functions for events data
+def load_events():
+    if os.path.exists(EVENT_FILE):
+        with open(EVENT_FILE, "r") as f:
+            return json.load(f)
+    return {}
 
-# def save_events(data):
-#     with open(EVENT_FILE, "w") as f:
-#         json.dump(data, f, indent=4)
+def save_events(data):
+    with open(EVENT_FILE, "w") as f:
+        json.dump(data, f, indent=4)
 
-# events = load_events()
+events = load_events()
 
-# # Schedule reminder check
-# @tasks.loop(minutes=1)
-# async def check_events():
-#     now = datetime.now()
-#     for time_str, data in events.items():
-#         event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+# Schedule reminder check
+@tasks.loop(minutes=1)
+async def check_events():
+    now = datetime.now()
+    for time_str, data in events.items():
+        event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
 
-#         # 초기화가 안 되어 있으면 새로 설정
-#         if isinstance(data.get("notified"), bool) or "notified" not in data:
-#             data["notified"] = {"30": False, "10": False, "0": False}
+        # 초기화가 안 되어 있으면 새로 설정
+        if isinstance(data.get("notified"), bool) or "notified" not in data:
+            data["notified"] = {"30": False, "10": False, "0": False}
 
-#         # 알림 대상 사용자
-#         mentions = ' '.join([f'<@{uid}>' for uid in data.get("participants", [])])
-#         channel = bot.get_channel(data["channel_id"])
+        # 알림 대상 사용자
+        mentions = ' '.join([f'<@{uid}>' for uid in data.get("participants", [])])
+        channel = bot.get_channel(data["channel_id"])
 
-#         # 30분 전
-#         if not data["notified"]["30"] and now + timedelta(minutes=30) >= event_time:
-#             await channel.send(f"🔔 **[30분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
-#             data["notified"]["30"] = True
+        # 30분 전
+        if not data["notified"]["30"] and now + timedelta(minutes=30) >= event_time:
+            await channel.send(f"🔔 **[30분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
+            data["notified"]["30"] = True
 
-#         # 10분 전
-#         if not data["notified"]["10"] and now + timedelta(minutes=10) >= event_time:
-#             await channel.send(f"⏰ **[10분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
-#             data["notified"]["10"] = True
+        # 10분 전
+        if not data["notified"]["10"] and now + timedelta(minutes=10) >= event_time:
+            await channel.send(f"⏰ **[10분 전 알림]** `{data['title']}` 일정이 곧 시작합니다!\n{mentions}")
+            data["notified"]["10"] = True
 
-#         # 시작 시
-#         if not data["notified"]["0"] and now >= event_time:
-#             await channel.send(f"🚀 **[일정 시작]** `{data['title']}` 일정이 시작되었습니다!\n{mentions}")
-#             data["notified"]["0"] = True
-
-
-# # 일정추가
-# class ScheduleModal(discord.ui.Modal, title="일정 추가"):
-#     title_input = discord.ui.TextInput(label="일정 제목", placeholder="예: 팀 회의", max_length=50)
-#     time_input = discord.ui.TextInput(label="시작 시간 (YYYY-MM-DD HH:MM)", placeholder="2025-07-01 15:00")
-#     participants_input = discord.ui.TextInput(label="참여자 멘션들", placeholder="@사용자1 @사용자2")
-
-#     async def on_submit(self, interaction: discord.Interaction):
-#         title = self.title_input.value
-#         time_str = self.time_input.value
-#         participants_raw = self.participants_input.value
-
-#         print("[디버그] 입력받은 시간:", time_str)
-#         print("[디버그] 입력받은 멘션들:", participants_raw)
-
-#         try:
-#             dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-#         except ValueError:
-#             await interaction.response.send_message("❗ 시간 형식이 잘못되었습니다. 예: 2025-07-01 15:00", ephemeral=True)
-#             return
-
-#         try:
-#             uids = [int(user_id.strip("<@!>")) for user_id in participants_raw.split()]
-#         except Exception:
-#             await interaction.response.send_message("❗ 참여자 형식이 잘못되었습니다. 멘션을 정확히 입력해주세요.", ephemeral=True)
-#             return
-
-#         events[time_str] = {
-#             "title": title,
-#             "participants": uids,
-#             "channel_id": interaction.channel_id,
-#             "notified": {"30": False, "10": False, "0": False},
-#             "attendance": {}
-#         }
-
-#         save_events(events)
-#         await interaction.response.send_message(f"✅ `{title}` 일정이 성공적으로 등록되었습니다!", ephemeral=True)
-
-# @bot.tree.command(name="일정추가", description="모달을 이용하여 일정을 추가합니다")
-# async def 일정추가(interaction: discord.Interaction):
-#     await interaction.response.send_modal(ScheduleModal())
+        # 시작 시
+        if not data["notified"]["0"] and now >= event_time:
+            await channel.send(f"🚀 **[일정 시작]** `{data['title']}` 일정이 시작되었습니다!\n{mentions}")
+            data["notified"]["0"] = True
 
 
+# 일정추가
+class ScheduleModal(discord.ui.Modal, title="일정 추가"):
+    title_input = discord.ui.TextInput(label="일정 제목", placeholder="예: 팀 회의", max_length=50)
+    time_input = discord.ui.TextInput(label="시작 시간 (YYYY-MM-DD HH:MM)", placeholder="2025-07-01 15:00")
+    participants_input = discord.ui.TextInput(label="참여자 멘션들", placeholder="@사용자1 @사용자2")
 
-# # 일정 목록 확인
-# @bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
-# async def 일정목록(interaction: discord.Interaction):
-#     try:
-#         print("[디버그] 일정목록 명령어 실행됨")
+    async def on_submit(self, interaction: discord.Interaction):
+        title = self.title_input.value
+        time_str = self.time_input.value
+        participants_raw = self.participants_input.value
 
-#         # 1️⃣ 즉시 응답: 사용자에게 처리 중 메시지 표시
-#         await interaction.response.send_message("⏳ 일정을 불러오는 중입니다...", ephemeral=True)
-#         print("[디버그] 초기 응답 전송 완료")
+        print("[디버그] 입력받은 시간:", time_str)
+        print("[디버그] 입력받은 멘션들:", participants_raw)
 
-#         if not events:
-#             await interaction.followup.send("📭 예정된 일정이 없습니다.", ephemeral=True)
-#             print("[디버그] 등록된 일정 없음 - 안내 메시지 전송 완료")
-#             return
+        try:
+            dt = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        except ValueError:
+            await interaction.response.send_message("❗ 시간 형식이 잘못되었습니다. 예: 2025-07-01 15:00", ephemeral=True)
+            return
 
-#         embed = discord.Embed(title="📅 예정된 일정 목록", color=discord.Color.blue())
-#         for time_str, data in sorted(events.items()):
-#             users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
-#             embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
+        try:
+            uids = [int(user_id.strip("<@!>")) for user_id in participants_raw.split()]
+        except Exception:
+            await interaction.response.send_message("❗ 참여자 형식이 잘못되었습니다. 멘션을 정확히 입력해주세요.", ephemeral=True)
+            return
 
-#         await interaction.followup.send(embed=embed, ephemeral=True)
-#         print("[디버그] 일정 목록 전송 완료")
+        events[time_str] = {
+            "title": title,
+            "participants": uids,
+            "channel_id": interaction.channel_id,
+            "notified": {"30": False, "10": False, "0": False},
+            "attendance": {}
+        }
 
-#     except Exception as e:
-#         print("[에러] 일정목록 명령어 실패:", e)
-#         await interaction.followup.send("❗ 일정 목록을 불러오던 중 오류가 발생했습니다.", ephemeral=True)
+        save_events(events)
+        await interaction.response.send_message(f"✅ `{title}` 일정이 성공적으로 등록되었습니다!", ephemeral=True)
 
-# # 일정삭제
-# @bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
-# @app_commands.describe(time="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
-# async def 일정삭제(interaction: discord.Interaction, time: str):
-#     try:
-#         await interaction.response.defer(thinking=False)
-#     except Exception as e:
-#         print(f"[에러] 일정삭제 defer 실패: {e}")
-#         return
+@bot.tree.command(name="일정추가", description="모달을 이용하여 일정을 추가합니다")
+async def 일정추가(interaction: discord.Interaction):
+    await interaction.response.send_modal(ScheduleModal())
 
-#     if time not in events:
-#         await interaction.followup.send("❗ 해당 시간에 등록된 일정이 없습니다.", ephemeral=True)
-#         return
 
-#     del events[time]
-#     save_events(events)
-#     await interaction.followup.send(f"🗑 `{time}` 일정이 삭제되었습니다.")
 
-# # 출석 체크
-# @bot.tree.command(name="출석", description="출석을 체크합니다")
-# async def 출석(interaction: discord.Interaction):
-#     uid = str(interaction.user.id)
-#     now = datetime.now().strftime("%Y-%m-%d %H:%M")
+# 일정 목록 확인
+@bot.tree.command(name="일정목록", description="예정된 일정을 확인합니다")
+async def 일정목록(interaction: discord.Interaction):
+    try:
+        print("[디버그] 일정목록 명령어 실행됨")
 
-#     for time_str, data in events.items():
-#         if uid in map(str, data["participants"]):
-#             if uid not in data["attendance"]:
-#                 data["attendance"][uid] = now
-#                 save_events(events)
-#                 await interaction.response.send_message(f"✅ `{data['title']}` 출석 체크 완료! ({now})")
-#                 return
+        # 1️⃣ 즉시 응답: 사용자에게 처리 중 메시지 표시
+        await interaction.response.send_message("⏳ 일정을 불러오는 중입니다...", ephemeral=True)
+        print("[디버그] 초기 응답 전송 완료")
 
-#     await interaction.response.send_message("❗ 출석할 일정이 없습니다.")
+        if not events:
+            await interaction.followup.send("📭 예정된 일정이 없습니다.", ephemeral=True)
+            print("[디버그] 등록된 일정 없음 - 안내 메시지 전송 완료")
+            return
 
-# # 지각 통계
-# @bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간")
-# async def 지각통계(interaction: discord.Interaction):
-#     delay_stats = {}
+        embed = discord.Embed(title="📅 예정된 일정 목록", color=discord.Color.blue())
+        for time_str, data in sorted(events.items()):
+            users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
+            embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
 
-#     for time_str, data in events.items():
-#         start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-#         for uid in data.get("participants", []):
-#             uid = str(uid)
-#             attend_time = data.get("attendance", {}).get(uid)
-#             if attend_time:
-#                 delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
-#                 if delta > 0:
-#                     if uid not in delay_stats:
-#                         delay_stats[uid] = []
-#                     delay_stats[uid].append(delta)
+        await interaction.followup.send(embed=embed, ephemeral=True)
+        print("[디버그] 일정 목록 전송 완료")
 
-#     if not delay_stats:
-#         await interaction.response.send_message("📊 아직 지각 통계가 없습니다.")
-#         return
+    except Exception as e:
+        print("[에러] 일정목록 명령어 실패:", e)
+        await interaction.followup.send("❗ 일정 목록을 불러오던 중 오류가 발생했습니다.", ephemeral=True)
 
-#     embed = discord.Embed(title="⏱ 지각 통계", color=discord.Color.orange())
-#     for uid, delays in delay_stats.items():
-#         user = await bot.fetch_user(int(uid))
-#         avg_delay = sum(delays) / len(delays)
-#         embed.add_field(name=user.display_name, value=f"지각 횟수: {len(delays)}회\n평균 지각 시간: {avg_delay:.1f}분", inline=False)
+# 일정삭제
+@bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
+@app_commands.describe(time="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
+async def 일정삭제(interaction: discord.Interaction, time: str):
+    try:
+        await interaction.response.defer(thinking=False)
+    except Exception as e:
+        print(f"[에러] 일정삭제 defer 실패: {e}")
+        return
 
-#     await interaction.response.send_message(embed=embed)
+    if time not in events:
+        await interaction.followup.send("❗ 해당 시간에 등록된 일정이 없습니다.", ephemeral=True)
+        return
 
-# # 지각왕
-# @bot.tree.command(name="지각왕", description="지각왕을 보여줍니다")
-# async def 지각왕(interaction: discord.Interaction):
-#     delay_counts = {}
-#     total_delays = {}
+    del events[time]
+    save_events(events)
+    await interaction.followup.send(f"🗑 `{time}` 일정이 삭제되었습니다.")
 
-#     for time_str, data in events.items():
-#         start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-#         for uid in data.get("participants", []):
-#             uid = str(uid)
-#             attend_time = data.get("attendance", {}).get(uid)
-#             if attend_time:
-#                 delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
-#                 if delta > 0:
-#                     delay_counts[uid] = delay_counts.get(uid, 0) + 1
-#                     total_delays[uid] = total_delays.get(uid, 0) + delta
+# 일정전체삭제
+@bot.tree.command(name="일정전체삭제", description="전체 일정을 삭제합니다 (되돌릴 수 없음)")
+async def 일정전체삭제(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("⚠️ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
 
-#     if not delay_counts:
-#         await interaction.response.send_message("👑 현재 지각왕이 없습니다.")
-#         return
+    await interaction.response.send_message(
+        "⚠️ **정말로 모든 일정을 삭제하시겠습니까?**\n삭제를 원하면 `/일정삭제확인` 명령어를 실행해주세요.",
+        ephemeral=True
+    )
 
-#     top_uid = max(delay_counts, key=delay_counts.get)
-#     top_user = await bot.fetch_user(int(top_uid))
+#전차삭제확인
+@bot.tree.command(name="일정삭제확인", description="일정 전체 삭제를 확정합니다 (되돌릴 수 없음)")
+async def 일정삭제확인(interaction: discord.Interaction):
+    events.clear()
+    save_events(events)
+    await interaction.response.send_message("🗑 모든 일정이 성공적으로 삭제되었습니다.", ephemeral=True)
 
-#     embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
-#     embed.add_field(name="이름", value=top_user.display_name, inline=True)
-#     embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
-#     embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
 
-#     await interaction.response.send_message(embed=embed)
+# 출석 체크
+@bot.tree.command(name="출석", description="출석을 체크합니다")
+async def 출석(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    now = datetime.now().strftime("%Y-%m-%d %H:%M")
 
-#     top_uid = max(delay_counts, key=delay_counts.get)
-#     top_user = await bot.fetch_user(int(top_uid))
+    for time_str, data in events.items():
+        if uid in map(str, data["participants"]):
+            if uid not in data["attendance"]:
+                data["attendance"][uid] = now
+                save_events(events)
+                await interaction.response.send_message(f"✅ `{data['title']}` 출석 체크 완료! ({now})")
+                return
 
-#     embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
-#     embed.add_field(name="이름", value=top_user.display_name, inline=True)
-#     embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
-#     embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+    await interaction.response.send_message("❗ 출석할 일정이 없습니다.")
 
-#     await interaction.response.send_message(embed=embed)
+# 지각 통계
+@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간")
+async def 지각통계(interaction: discord.Interaction):
+    delay_stats = {}
 
-# # 출석률
-# @bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
-# @app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
-# async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
-#     try:
-#         await interaction.response.defer(thinking=False)
-#     except Exception as e:
-#         print(f"[에러] 출석률 defer 실패: {e}")
-#         return
+    for time_str, data in events.items():
+        start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        for uid in data.get("participants", []):
+            uid = str(uid)
+            attend_time = data.get("attendance", {}).get(uid)
+            if attend_time:
+                delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
+                if delta > 0:
+                    if uid not in delay_stats:
+                        delay_stats[uid] = []
+                    delay_stats[uid].append(delta)
 
-#     user = 대상 or interaction.user
-#     uid = str(user.id)
+    if not delay_stats:
+        await interaction.response.send_message("📊 아직 지각 통계가 없습니다.")
+        return
 
-#     참여수 = 0
-#     출석수 = 0
+    embed = discord.Embed(title="⏱ 지각 통계", color=discord.Color.orange())
+    for uid, delays in delay_stats.items():
+        user = await bot.fetch_user(int(uid))
+        avg_delay = sum(delays) / len(delays)
+        embed.add_field(name=user.display_name, value=f"지각 횟수: {len(delays)}회\n평균 지각 시간: {avg_delay:.1f}분", inline=False)
 
-#     for data in events.values():
-#         if int(uid) in data.get("participants", []):
-#             참여수 += 1
-#             if uid in data.get("attendance", {}):
-#                 출석수 += 1
+    await interaction.response.send_message(embed=embed)
 
-#     embed = discord.Embed(
-#         title=f"📊 {user.display_name} 님의 출석률",
-#         color=discord.Color.green() if 참여수 else discord.Color.greyple()
-#     )
+# 지각왕
+@bot.tree.command(name="지각왕", description="지각왕을 보여줍니다")
+async def 지각왕(interaction: discord.Interaction):
+    delay_counts = {}
+    total_delays = {}
 
-#     if 참여수 == 0:
-#         embed.description = "참여한 일정이 없습니다."
-#     else:
-#         rate = (출석수 / 참여수) * 100
-#         embed.add_field(name="✅ 총 참여 일정 수", value=f"{참여수}회", inline=True)
-#         embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
-#         embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
+    for time_str, data in events.items():
+        start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        for uid in data.get("participants", []):
+            uid = str(uid)
+            attend_time = data.get("attendance", {}).get(uid)
+            if attend_time:
+                delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
+                if delta > 0:
+                    delay_counts[uid] = delay_counts.get(uid, 0) + 1
+                    total_delays[uid] = total_delays.get(uid, 0) + delta
 
-#     await interaction.followup.send(embed=embed)
+    if not delay_counts:
+        await interaction.response.send_message("👑 현재 지각왕이 없습니다.")
+        return
+
+    top_uid = max(delay_counts, key=delay_counts.get)
+    top_user = await bot.fetch_user(int(top_uid))
+
+    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
+    embed.add_field(name="이름", value=top_user.display_name, inline=True)
+    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+
+    await interaction.response.send_message(embed=embed)
+
+    top_uid = max(delay_counts, key=delay_counts.get)
+    top_user = await bot.fetch_user(int(top_uid))
+
+    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
+    embed.add_field(name="이름", value=top_user.display_name, inline=True)
+    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+
+    await interaction.response.send_message(embed=embed)
+
+# 출석률
+@bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
+@app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
+async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
+    try:
+        await interaction.response.defer(thinking=False)
+    except Exception as e:
+        print(f"[에러] 출석률 defer 실패: {e}")
+        return
+
+    user = 대상 or interaction.user
+    uid = str(user.id)
+
+    참여수 = 0
+    출석수 = 0
+
+    for data in events.values():
+        if int(uid) in data.get("participants", []):
+            참여수 += 1
+            if uid in data.get("attendance", {}):
+                출석수 += 1
+
+    embed = discord.Embed(
+        title=f"📊 {user.display_name} 님의 출석률",
+        color=discord.Color.green() if 참여수 else discord.Color.greyple()
+    )
+
+    if 참여수 == 0:
+        embed.description = "참여한 일정이 없습니다."
+    else:
+        rate = (출석수 / 참여수) * 100
+        embed.add_field(name="✅ 총 참여 일정 수", value=f"{참여수}회", inline=True)
+        embed.add_field(name="📌 출석 완료", value=f"{출석수}회", inline=True)
+        embed.add_field(name="📈 출석률", value=f"{rate:.1f}%", inline=True)
+
+    await interaction.followup.send(embed=embed)
 
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
@@ -485,7 +503,7 @@ async def on_ready():
         print(f"✅ 등록된 명령어: {[cmd.name for cmd in synced]}")
     except Exception as e:
         print("명령어 등록 실패:", e)
-    # check_events.start()
+    check_events.start()
 
 bot.run(token)
 
