@@ -287,6 +287,28 @@ async def check_events():
         
             await channel.send(embed=embed)
 
+# 지난 일정 삭제
+@tasks.loop(minutes=60)
+async def clean_old_events():
+    now_kst = datetime.utcnow() + timedelta(hours=9)  # KST
+    if now_kst.hour != 6:
+        return
+
+    to_delete = []
+    logs = load_attendance_log()
+    for time_str, data in list(events.items()):
+        start_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        if start_time.date() < now_kst.date():
+            if time_str not in logs:  # ✅ 중복 저장 방지
+                save_attendance_log_entry(time_str, data)
+            to_delete.append(time_str)
+
+    for t in to_delete:
+        del events[t]
+
+    if to_delete:
+        save_events(events)
+        print(f"[자동 삭제] 다음 일정 삭제됨: {to_delete}")
 
 
 
@@ -413,6 +435,7 @@ async def 일정삭제(interaction: discord.Interaction, time: str):
         await interaction.followup.send("❗ 해당 시간에 등록된 일정이 없습니다.", ephemeral=True)
         return
 
+    save_attendance_log_entry(time, events[time])  # ✅ 출석 정보 저장
     del events[time]
     save_events(events)
     await interaction.followup.send(f"🗑 `{time}` 일정이 삭제되었습니다.")
@@ -432,9 +455,28 @@ async def 일정전체삭제(interaction: discord.Interaction):
 #전체삭제확인
 @bot.tree.command(name="일정삭제확인", description="일정 전체 삭제를 확정합니다 (되돌릴 수 없음)")
 async def 일정삭제확인(interaction: discord.Interaction):
+    logs = load_attendance_log()
+    for t, data in events.items():
+        if t not in logs:  # ✅ 출석 기록 중복 방지
+            save_attendance_log_entry(t, data)
+
     events.clear()
     save_events(events)
     await interaction.response.send_message("🗑 모든 일정이 성공적으로 삭제되었습니다.", ephemeral=True)
+
+# 출석체크 파일
+def load_attendance_log():
+    if os.path.exists(ATTENDANCE_FILE):
+        with open(ATTENDANCE_FILE, "r") as f:
+            return json.load(f)
+    return {}
+
+def save_attendance_log_entry(event_time: str, data: dict):
+    logs = load_attendance_log()
+    if event_time not in logs:  # ✅ 중복 저장 방지
+        logs[event_time] = data
+        with open(ATTENDANCE_FILE, "w") as f:
+            json.dump(logs, f, indent=4)
 
 
 # 출석 체크
@@ -508,11 +550,12 @@ async def 지각통계(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 # 지각왕
-@bot.tree.command(name="지각왕", description="지각왕을 보여줍니다")
+@bot.tree.command(name="지각왕", description="지각왕을 보여줍니다 (삭제된 일정 포함)")
 async def 지각왕(interaction: discord.Interaction):
     delay_counts = {}
     total_delays = {}
 
+    # 🔹 현재 남아있는 일정
     for time_str, data in events.items():
         start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
         for uid in data.get("participants", []):
@@ -524,6 +567,20 @@ async def 지각왕(interaction: discord.Interaction):
                     delay_counts[uid] = delay_counts.get(uid, 0) + 1
                     total_delays[uid] = total_delays.get(uid, 0) + delta
 
+    # 🔹 삭제된 일정 포함
+    attendance_log = load_attendance_log()
+    for time_str, data in attendance_log.items():
+        start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        for uid in data.get("participants", []):
+            uid = str(uid)
+            attend_time = data.get("attendance", {}).get(uid)
+            if attend_time:
+                delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
+                if delta > 0:
+                    delay_counts[uid] = delay_counts.get(uid, 0) + 1
+                    total_delays[uid] = total_delays.get(uid, 0) + delta
+
+    # 🔸 결과 출력
     if not delay_counts:
         await interaction.response.send_message("👑 현재 지각왕이 없습니다.")
         return
@@ -531,25 +588,16 @@ async def 지각왕(interaction: discord.Interaction):
     top_uid = max(delay_counts, key=delay_counts.get)
     top_user = await bot.fetch_user(int(top_uid))
 
-    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
+    embed = discord.Embed(title="👑 지각왕 (삭제된 일정 포함)", color=discord.Color.red())
     embed.add_field(name="이름", value=top_user.display_name, inline=True)
     embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
     embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
 
     await interaction.response.send_message(embed=embed)
 
-    top_uid = max(delay_counts, key=delay_counts.get)
-    top_user = await bot.fetch_user(int(top_uid))
-
-    embed = discord.Embed(title="👑 지각왕", color=discord.Color.red())
-    embed.add_field(name="이름", value=top_user.display_name, inline=True)
-    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
-    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
-
-    await interaction.response.send_message(embed=embed)
 
 # 출석률
-@bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다")
+@bot.tree.command(name="출석률", description="사용자의 출석률을 확인합니다 (삭제된 일정 포함)")
 @app_commands.describe(대상="출석률을 확인할 대상 (멘션 또는 생략 시 본인)")
 async def 출석률(interaction: discord.Interaction, 대상: discord.User = None):
     try:
@@ -564,7 +612,16 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
     참여수 = 0
     출석수 = 0
 
+    # 🔹 현재 남아있는 일정
     for data in events.values():
+        if int(uid) in data.get("participants", []):
+            참여수 += 1
+            if uid in data.get("attendance", {}):
+                출석수 += 1
+
+    # 🔹 삭제된 일정 포함 (출석 로그)
+    attendance_log = load_attendance_log()
+    for data in attendance_log.values():
         if int(uid) in data.get("participants", []):
             참여수 += 1
             if uid in data.get("attendance", {}):
@@ -585,7 +642,6 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
 
     await interaction.followup.send(embed=embed)
 
-
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
 async def on_ready():
@@ -596,6 +652,7 @@ async def on_ready():
     except Exception as e:
         print("명령어 등록 실패:", e)
     check_events.start()
+    clean_old_events.start()
 
 bot.run(token)
 
