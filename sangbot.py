@@ -20,6 +20,7 @@ print("🔍 토큰 값:", repr(token))
 
 intents = discord.Intents.default()
 intents.message_content = True
+intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ! 명령어 정의
