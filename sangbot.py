@@ -595,6 +595,9 @@ async def 지각왕(interaction: discord.Interaction):
                 if delta > 0:
                     delay_counts[uid] = delay_counts.get(uid, 0) + 1
                     total_delays[uid] = total_delays.get(uid, 0) + delta
+            else:
+                # 출석하지 않은 경우도 지각으로 처리
+                delay_counts[uid] = delay_counts.get(uid, 0) + 1
 
     # 🔹 삭제된 일정 포함
     attendance_log = load_attendance_log()
@@ -608,6 +611,8 @@ async def 지각왕(interaction: discord.Interaction):
                 if delta > 0:
                     delay_counts[uid] = delay_counts.get(uid, 0) + 1
                     total_delays[uid] = total_delays.get(uid, 0) + delta
+            else:
+                delay_counts[uid] = delay_counts.get(uid, 0) + 1
 
     # 🔸 결과 출력
     if not delay_counts:
@@ -620,7 +625,7 @@ async def 지각왕(interaction: discord.Interaction):
     embed = discord.Embed(title="👑 지각왕 (삭제된 일정 포함)", color=discord.Color.red())
     embed.add_field(name="이름", value=top_user.display_name, inline=True)
     embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
-    embed.add_field(name="누적 지각 시간", value=f"{total_delays[top_uid]:.1f}분", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays.get(top_uid, 0):.1f}분", inline=True)
 
     await interaction.response.send_message(embed=embed)
 
