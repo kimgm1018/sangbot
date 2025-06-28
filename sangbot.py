@@ -261,6 +261,32 @@ async def check_events():
         if not data["notified"]["0"] and now >= event_time:
             await channel.send(f"🚀 **[일정 시작]** `{data['title']}` 일정이 시작되었습니다!\n{mentions}")
             data["notified"]["0"] = True
+        
+            # 출석 현황 Embed 생성
+            참여자 = list(map(str, data.get("participants", [])))
+            출석자 = list(data.get("attendance", {}).keys())
+            미출석자 = [uid for uid in 참여자 if uid not in 출석자]
+        
+            embed = discord.Embed(
+                title=f"📋 `{data['title']}` 출석 현황",
+                description=f"🕒 일정 시간: {time_str}",
+                color=discord.Color.teal()
+            )
+        
+            if 출석자:
+                출석_멘션 = "\n".join([f"<@{uid}> ✅" for uid in 출석자])
+                embed.add_field(name="출석자", value=출석_멘션, inline=False)
+            else:
+                embed.add_field(name="출석자", value="없음", inline=False)
+        
+            if 미출석자:
+                미출석_멘션 = "\n".join([f"<@{uid}> ❌" for uid in 미출석자])
+                embed.add_field(name="미출석자", value=미출석_멘션, inline=False)
+            else:
+                embed.add_field(name="미출석자", value="없음", inline=False)
+        
+            await channel.send(embed=embed)
+
 
 
 
@@ -403,7 +429,7 @@ async def 일정전체삭제(interaction: discord.Interaction):
         ephemeral=True
     )
 
-#전차삭제확인
+#전체삭제확인
 @bot.tree.command(name="일정삭제확인", description="일정 전체 삭제를 확정합니다 (되돌릴 수 없음)")
 async def 일정삭제확인(interaction: discord.Interaction):
     events.clear()
@@ -415,17 +441,42 @@ async def 일정삭제확인(interaction: discord.Interaction):
 @bot.tree.command(name="출석", description="출석을 체크합니다")
 async def 출석(interaction: discord.Interaction):
     uid = str(interaction.user.id)
-    now = datetime.now().strftime("%Y-%m-%d %H:%M")
+    now = datetime.now()
+
+    # 출석 가능한 일정 목록 (30분 전 ~ 시작 시각 전)
+    가능한_일정 = []
 
     for time_str, data in events.items():
+        event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
         if uid in map(str, data["participants"]):
-            if uid not in data["attendance"]:
-                data["attendance"][uid] = now
-                save_events(events)
-                await interaction.response.send_message(f"✅ `{data['title']}` 출석 체크 완료! ({now})")
-                return
+            if event_time - timedelta(minutes=30) <= now < event_time:
+                가능한_일정.append((time_str, data))
 
-    await interaction.response.send_message("❗ 출석할 일정이 없습니다.")
+    if not 가능한_일정:
+        await interaction.response.send_message("❗ 출석 가능한 일정이 없습니다.\n(30분 전부터 일정 시작 전까지만 출석할 수 있습니다.)", ephemeral=True)
+        return
+
+    # 여러 개 중 하나 선택
+    options = [
+        discord.SelectOption(label=f"{data['title']} ({time_str})", value=time_str)
+        for time_str, data in 가능한_일정
+    ]
+
+    class AttendanceSelect(discord.ui.Select):
+        def __init__(self):
+            super().__init__(placeholder="출석할 일정을 선택하세요", options=options, min_values=1, max_values=1)
+
+        async def callback(self, interaction: discord.Interaction):
+            selected_time = self.values[0]
+            events[selected_time]["attendance"][uid] = now.strftime("%Y-%m-%d %H:%M")
+            save_events(events)
+            await interaction.response.send_message(f"✅ `{events[selected_time]['title']}` 출석 체크 완료!", ephemeral=True)
+
+    view = discord.ui.View()
+    view.add_item(AttendanceSelect())
+    await interaction.response.send_message("📝 출석할 일정을 선택하세요:", view=view, ephemeral=True)
+
+
 
 # 지각 통계
 @bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간")
