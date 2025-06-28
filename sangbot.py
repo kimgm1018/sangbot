@@ -550,11 +550,11 @@ async def 출석(interaction: discord.Interaction):
 
 
 # 지각 통계
-@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간 (미출석도 지각으로 포함)")
+# 기존 지각통계 명령어 부분 전체를 아래 내용으로 교체하세요
+@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간 (미출석도 지각 포함)")
 async def 지각통계(interaction: discord.Interaction):
     delay_stats = {}
 
-    # 🔹 현재 일정 + 삭제된 일정 포함
     all_data = list(events.items()) + list(load_attendance_log().items())
 
     for time_str, data in all_data:
@@ -570,8 +570,10 @@ async def 지각통계(interaction: discord.Interaction):
                 delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
                 if delta > 0:
                     delay_stats[uid].append(delta)
+                else:
+                    delay_stats[uid].append(0.0)  # 정시 출석도 기록
             else:
-                delay_stats[uid].append(None)  # 출석 안 한 경우는 지각 처리 (시간 없음)
+                delay_stats[uid].append(None)  # ❗ 출석하지 않음
 
     if not delay_stats:
         await interaction.response.send_message("📊 아직 지각 통계가 없습니다.")
@@ -581,15 +583,14 @@ async def 지각통계(interaction: discord.Interaction):
     for uid, delays in delay_stats.items():
         user = await bot.fetch_user(int(uid))
         total_count = len(delays)
-        actual_delays = [d for d in delays if d is not None]
+        late_count = sum(1 for d in delays if d is None or d > 0)
+        avg_delay = sum(d for d in delays if d is not None and d > 0) / max(1, sum(1 for d in delays if d and d > 0))
 
-        if actual_delays:
-            avg_delay = sum(actual_delays) / len(actual_delays)
-            value = f"지각 횟수: {total_count}회\n평균 지각 시간: {avg_delay:.1f}분"
-        else:
-            value = f"지각 횟수: {total_count}회\n(모두 무단 결석)"
-
-        embed.add_field(name=user.display_name, value=value, inline=False)
+        embed.add_field(
+            name=user.display_name,
+            value=f"지각 횟수: {late_count}회 / 총 {total_count}회\n평균 지각 시간: {avg_delay:.1f}분",
+            inline=False
+        )
 
     await interaction.response.send_message(embed=embed)
 
