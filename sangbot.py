@@ -294,6 +294,8 @@ async def clean_old_events():
     if now_kst.hour != 6:
         return
 
+    ATTENDANCE_FILE = "attendance_log.json"
+
     to_delete = []
     logs = load_attendance_log()
     for time_str, data in list(events.items()):
