@@ -550,33 +550,49 @@ async def 출석(interaction: discord.Interaction):
 
 
 # 지각 통계
-@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간")
+@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간 (미출석도 지각으로 포함)")
 async def 지각통계(interaction: discord.Interaction):
     delay_stats = {}
 
-    for time_str, data in events.items():
+    # 🔹 현재 일정 + 삭제된 일정 포함
+    all_data = list(events.items()) + list(load_attendance_log().items())
+
+    for time_str, data in all_data:
         start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
         for uid in data.get("participants", []):
             uid = str(uid)
             attend_time = data.get("attendance", {}).get(uid)
+
+            if uid not in delay_stats:
+                delay_stats[uid] = []
+
             if attend_time:
                 delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
                 if delta > 0:
-                    if uid not in delay_stats:
-                        delay_stats[uid] = []
                     delay_stats[uid].append(delta)
+            else:
+                delay_stats[uid].append(None)  # 출석 안 한 경우는 지각 처리 (시간 없음)
 
     if not delay_stats:
         await interaction.response.send_message("📊 아직 지각 통계가 없습니다.")
         return
 
-    embed = discord.Embed(title="⏱ 지각 통계", color=discord.Color.orange())
+    embed = discord.Embed(title="⏱ 지각 통계 (미출석 포함)", color=discord.Color.orange())
     for uid, delays in delay_stats.items():
         user = await bot.fetch_user(int(uid))
-        avg_delay = sum(delays) / len(delays)
-        embed.add_field(name=user.display_name, value=f"지각 횟수: {len(delays)}회\n평균 지각 시간: {avg_delay:.1f}분", inline=False)
+        total_count = len(delays)
+        actual_delays = [d for d in delays if d is not None]
+
+        if actual_delays:
+            avg_delay = sum(actual_delays) / len(actual_delays)
+            value = f"지각 횟수: {total_count}회\n평균 지각 시간: {avg_delay:.1f}분"
+        else:
+            value = f"지각 횟수: {total_count}회\n(모두 무단 결석)"
+
+        embed.add_field(name=user.display_name, value=value, inline=False)
 
     await interaction.response.send_message(embed=embed)
+
 
 # 지각왕
 @bot.tree.command(name="지각왕", description="지각왕을 보여줍니다 (삭제된 일정 포함)")
