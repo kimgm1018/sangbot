@@ -299,17 +299,26 @@ async def 일정추가(interaction: discord.Interaction):
 
 # ✅ 일정 참여 (유저 드롭다운으로 추가)
 class ParticipantSelect(discord.ui.Select):
-    def __init__(self, time_str: str, interaction: discord.Interaction):
+    def __init__(self, time_str: str, interaction: discord.Interaction):  # ✅ interaction 추가
         self.time_str = time_str
-        options = [
-            discord.SelectOption(label=member.display_name, value=str(member.id))
-            for member in interaction.guild.members if not member.bot
-        ][:25]
+
+        members = [
+            member for member in interaction.guild.members
+            if not member.bot
+        ]
+
+        if not members:
+            options = []
+        else:
+            options = [
+                discord.SelectOption(label=member.display_name, value=str(member.id))
+                for member in members
+            ][:25]
 
         super().__init__(
             placeholder="참여할 유저를 선택하세요",
             min_values=1,
-            max_values=min(25, len(options)),
+            max_values=min(25, len(options)) if options else 1,  # 🔧 fallback to 1
             options=options
         )
 
