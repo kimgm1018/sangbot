@@ -299,12 +299,12 @@ async def 일정추가(interaction: discord.Interaction):
 
 # ✅ 일정 참여 (유저 드롭다운으로 추가)
 class ParticipantSelect(discord.ui.Select):
-    def __init__(self, time_str: str):
+    def __init__(self, time_str: str, interaction: discord.Interaction):
         self.time_str = time_str
         options = [
             discord.SelectOption(label=member.display_name, value=str(member.id))
             for member in interaction.guild.members if not member.bot
-        ][:25]  # 최대 25명까지 제한
+        ][:25]
 
         super().__init__(
             placeholder="참여할 유저를 선택하세요",
@@ -322,7 +322,7 @@ class ParticipantSelect(discord.ui.Select):
 class ParticipantSelectView(discord.ui.View):
     def __init__(self, time_str: str, interaction: discord.Interaction):
         super().__init__(timeout=60)
-        self.add_item(ParticipantSelect(time_str))
+        self.add_item(ParticipantSelect(time_str, interaction))
 
 @bot.tree.command(name="일정참여", description="기존 일정에 유저를 추가합니다.")
 @app_commands.describe(시간="참여할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
