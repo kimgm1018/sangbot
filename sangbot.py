@@ -595,6 +595,7 @@ async def 지각통계(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+
 # 지각왕
 @bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간 (미출석도 지각으로 포함)")
 async def 지각통계(interaction: discord.Interaction):
