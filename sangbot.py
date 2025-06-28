@@ -15,7 +15,7 @@ from pytz import timezone
 
 
 KST = timezone("Asia/Seoul")
-
+ATTENDANCE_FILE = "attendance_log.json"
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
