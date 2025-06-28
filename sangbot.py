@@ -597,46 +597,53 @@ async def 지각통계(interaction: discord.Interaction):
 
 
 # 지각왕
-@bot.tree.command(name="지각통계", description="멤버별 지각 횟수 및 평균 지각 시간 (미출석도 지각으로 포함)")
-async def 지각통계(interaction: discord.Interaction):
-    delay_stats = {}
+@bot.tree.command(name="지각왕", description="지각왕을 보여줍니다 (삭제된 일정 포함)")
+async def 지각왕(interaction: discord.Interaction):
+    delay_counts = {}
+    total_delays = {}
 
-    # 🔹 현재 일정 + 삭제된 일정 포함
-    all_data = list(events.items()) + list(load_attendance_log().items())
-
-    for time_str, data in all_data:
+    # 🔹 현재 남아있는 일정
+    for time_str, data in events.items():
         start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
         for uid in data.get("participants", []):
             uid = str(uid)
             attend_time = data.get("attendance", {}).get(uid)
-
-            if uid not in delay_stats:
-                delay_stats[uid] = []
-
             if attend_time:
                 delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
                 if delta > 0:
-                    delay_stats[uid].append(delta)
+                    delay_counts[uid] = delay_counts.get(uid, 0) + 1
+                    total_delays[uid] = total_delays.get(uid, 0) + delta
             else:
-                delay_stats[uid].append(None)  # 출석 안 한 경우는 지각 처리 (시간 없음)
+                # 출석하지 않은 경우도 지각으로 처리
+                delay_counts[uid] = delay_counts.get(uid, 0) + 1
 
-    if not delay_stats:
-        await interaction.response.send_message("📊 아직 지각 통계가 없습니다.")
+    # 🔹 삭제된 일정 포함
+    attendance_log = load_attendance_log()
+    for time_str, data in attendance_log.items():
+        start = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
+        for uid in data.get("participants", []):
+            uid = str(uid)
+            attend_time = data.get("attendance", {}).get(uid)
+            if attend_time:
+                delta = (datetime.strptime(attend_time, "%Y-%m-%d %H:%M") - start).total_seconds() / 60
+                if delta > 0:
+                    delay_counts[uid] = delay_counts.get(uid, 0) + 1
+                    total_delays[uid] = total_delays.get(uid, 0) + delta
+            else:
+                delay_counts[uid] = delay_counts.get(uid, 0) + 1
+
+    # 🔸 결과 출력
+    if not delay_counts:
+        await interaction.response.send_message("👑 현재 지각왕이 없습니다.")
         return
 
-    embed = discord.Embed(title="⏱ 지각 통계 (미출석 포함)", color=discord.Color.orange())
-    for uid, delays in delay_stats.items():
-        user = await bot.fetch_user(int(uid))
-        total_count = len(delays)
-        actual_delays = [d for d in delays if d is not None]
+    top_uid = max(delay_counts, key=delay_counts.get)
+    top_user = await bot.fetch_user(int(top_uid))
 
-        if actual_delays:
-            avg_delay = sum(actual_delays) / len(actual_delays)
-            value = f"지각 횟수: {total_count}회\n평균 지각 시간: {avg_delay:.1f}분"
-        else:
-            value = f"지각 횟수: {total_count}회\n(모두 무단 결석)"
-
-        embed.add_field(name=user.display_name, value=value, inline=False)
+    embed = discord.Embed(title="👑 지각왕 (삭제된 일정 포함)", color=discord.Color.red())
+    embed.add_field(name="이름", value=top_user.display_name, inline=True)
+    embed.add_field(name="지각 횟수", value=f"{delay_counts[top_uid]}회", inline=True)
+    embed.add_field(name="누적 지각 시간", value=f"{total_delays.get(top_uid, 0):.1f}분", inline=True)
 
     await interaction.response.send_message(embed=embed)
 
