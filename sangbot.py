@@ -483,19 +483,24 @@ def save_attendance_log_entry(event_time: str, data: dict):
 @bot.tree.command(name="출석", description="출석을 체크합니다")
 async def 출석(interaction: discord.Interaction):
     uid = str(interaction.user.id)
-    now = datetime.now()
+    now = datetime.now(KST)  # ✅ 한국 시간 기준으로 now 설정
 
     # 출석 가능한 일정 목록 (30분 전 ~ 시작 시각 전)
     가능한_일정 = []
 
     for time_str, data in events.items():
         event_time = datetime.strptime(time_str, "%Y-%m-%d %H:%M")
-        if uid in map(str, data["participants"]):
+        event_time = KST.localize(event_time)  # ✅ 이벤트 시간도 한국 시간으로 간주
+
+        if uid in map(str, data.get("participants", [])):
             if event_time - timedelta(minutes=30) <= now < event_time:
                 가능한_일정.append((time_str, data))
 
     if not 가능한_일정:
-        await interaction.response.send_message("❗ 출석 가능한 일정이 없습니다.\n(30분 전부터 일정 시작 전까지만 출석할 수 있습니다.)", ephemeral=True)
+        await interaction.response.send_message(
+            "❗ 출석 가능한 일정이 없습니다.\n(30분 전부터 일정 시작 전까지만 출석할 수 있습니다.)",
+            ephemeral=True
+        )
         return
 
     # 여러 개 중 하나 선택
@@ -512,11 +517,15 @@ async def 출석(interaction: discord.Interaction):
             selected_time = self.values[0]
             events[selected_time]["attendance"][uid] = now.strftime("%Y-%m-%d %H:%M")
             save_events(events)
-            await interaction.response.send_message(f"✅ `{events[selected_time]['title']}` 출석 체크 완료!", ephemeral=True)
+            await interaction.response.send_message(
+                f"✅ `{events[selected_time]['title']}` 출석 체크 완료!",
+                ephemeral=True
+            )
 
     view = discord.ui.View()
     view.add_item(AttendanceSelect())
     await interaction.response.send_message("📝 출석할 일정을 선택하세요:", view=view, ephemeral=True)
+
 
 
 
