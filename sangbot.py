@@ -345,6 +345,9 @@ class ScheduleCreateModal(discord.ui.Modal, title="일정 생성"):
 
 @bot.tree.command(name="일정추가", description="일정 제목과 시간만 입력합니다 (참여자는 나중에 등록)")
 async def 일정추가(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("⚠️ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
     await interaction.response.send_modal(ScheduleCreateModal())
 
 
@@ -388,6 +391,10 @@ class ParticipantSelectView(discord.ui.View):
 @bot.tree.command(name="일정참여", description="기존 일정에 유저를 추가합니다.")
 @app_commands.describe(시간="참여할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
 async def 일정참여(interaction: discord.Interaction, 시간: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("⚠️ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+
     if 시간 not in events:
         await interaction.response.send_message("❗ 해당 시간의 일정이 없습니다.", ephemeral=True)
         return
@@ -427,6 +434,10 @@ async def 일정목록(interaction: discord.Interaction):
 @bot.tree.command(name="일정삭제", description="일정을 삭제합니다")
 @app_commands.describe(time="삭제할 일정의 시작 시간 (YYYY-MM-DD HH:MM)")
 async def 일정삭제(interaction: discord.Interaction, time: str):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("⚠️ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+
     try:
         await interaction.response.defer(thinking=False)
     except Exception as e:
@@ -442,6 +453,7 @@ async def 일정삭제(interaction: discord.Interaction, time: str):
     save_events(events)
     await interaction.followup.send(f"🗑 `{time}` 일정이 삭제되었습니다.")
 
+
 # 일정전체삭제
 @bot.tree.command(name="일정전체삭제", description="전체 일정을 삭제합니다 (되돌릴 수 없음)")
 async def 일정전체삭제(interaction: discord.Interaction):
@@ -454,17 +466,23 @@ async def 일정전체삭제(interaction: discord.Interaction):
         ephemeral=True
     )
 
+
 #전체삭제확인
 @bot.tree.command(name="일정삭제확인", description="일정 전체 삭제를 확정합니다 (되돌릴 수 없음)")
 async def 일정삭제확인(interaction: discord.Interaction):
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("⚠️ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+
     logs = load_attendance_log()
     for t, data in events.items():
-        if t not in logs:  # ✅ 출석 기록 중복 방지
+        if t not in logs:
             save_attendance_log_entry(t, data)
 
     events.clear()
     save_events(events)
     await interaction.response.send_message("🗑 모든 일정이 성공적으로 삭제되었습니다.", ephemeral=True)
+
 
 # 출석체크 파일
 def load_attendance_log():
