@@ -414,7 +414,7 @@ async def 일정목록(interaction: discord.Interaction):
         print("[디버그] 초기 응답 전송 완료")
 
         if not events:
-            await interaction.followup.send("📭 예정된 일정이 없습니다.", ephemeral=True)
+            await interaction.followup.send("📭 예정된 일정이 없습니다.")
             print("[디버그] 등록된 일정 없음 - 안내 메시지 전송 완료")
             return
 
@@ -423,7 +423,7 @@ async def 일정목록(interaction: discord.Interaction):
             users = ', '.join([f'<@{uid}>' for uid in data["participants"]])
             embed.add_field(name=f"{data['title']} ({time_str})", value=f"참여자: {users}", inline=False)
 
-        await interaction.followup.send(embed=embed, ephemeral=True)
+        await interaction.followup.send(embed=embed)
         print("[디버그] 일정 목록 전송 완료")
 
     except Exception as e:
