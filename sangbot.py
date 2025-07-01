@@ -80,38 +80,42 @@ async def on_message(message):
         return
 
     uid = str(message.author.id)
-    before_xp = xp_data.get(uid, 0)
-    xp_data[uid] = before_xp + 10
-    save_data(xp_data)
 
-    before_level = calculate_level(before_xp)
-    current_level = calculate_level(xp_data[uid])
+    if uid not in xp_data:
+        xp_data[uid] = {"level": 0, "xp": 0}
 
-    # ✅ 레벨업 시 축하 메시지
-    if current_level > before_level:
-        channel = message.channel
-        await channel.send(
-            f"🎉 {message.author.mention} 님이 **레벨 {current_level}**로 레벨업 했습니다! 🥳"
+    xp_data[uid]["xp"] += 10
+
+    while xp_data[uid]["xp"] >= required_xp(xp_data[uid]["level"]):
+        xp_data[uid]["xp"] -= required_xp(xp_data[uid]["level"])
+        xp_data[uid]["level"] += 1
+
+        await message.channel.send(
+            f"🎉 {message.author.mention} 님이 **레벨 {xp_data[uid]['level']}**로 레벨업 했습니다! 🥳"
         )
 
+    save_data(xp_data)
     await bot.process_commands(message)
 
 
+
 # 레벨 계산 함수
-def calculate_level(xp):
-    return int(math.sqrt(xp // 20))
+def required_xp(level):
+    return (level + 1) ** 2 * 10
 
 @bot.tree.command(name="레벨", description="현재 경험치와 레벨을 확인합니다")
 async def 레벨(interaction: discord.Interaction):
     uid = str(interaction.user.id)
-    xp = xp_data.get(uid, 0)
-    level = calculate_level(xp)
-    next_level_xp = ((level + 1) ** 2) * 20
+    user_data = xp_data.get(uid, {"level": 0, "xp": 0})
+    level = user_data["level"]
+    xp = user_data["xp"]
+    next_level_xp = required_xp(level)
 
     embed = discord.Embed(title=f"{interaction.user.display_name} 님의 레벨 현황", color=discord.Color.blurple())
     embed.add_field(name="📊 경험치", value=f"{xp} / {next_level_xp}", inline=False)
     embed.add_field(name="⭐ 현재 레벨", value=f"{level} 레벨", inline=True)
     await interaction.response.send_message(embed=embed)
+
 
 @bot.tree.command(name="랭킹", description="경험치 상위 10명을 확인합니다")
 async def 랭킹(interaction: discord.Interaction):
@@ -120,13 +124,16 @@ async def 랭킹(interaction: discord.Interaction):
         return
 
     # XP 기준 정렬
-    sorted_users = sorted(xp_data.items(), key=lambda x: x[1], reverse=True)[:10]
+    sorted_users = sorted(xp_data.items(), key=lambda x: (x[1]["level"], x[1]["xp"]), reverse=True)
 
     embed = discord.Embed(title="🏆 경험치 랭킹 TOP 10", color=discord.Color.gold())
-    for idx, (uid, xp) in enumerate(sorted_users, start=1):
-        user = await bot.fetch_user(int(uid))
-        level = calculate_level(xp)
-        embed.add_field(name=f"{idx}. {user.display_name}", value=f"레벨 {level} | XP: {xp}", inline=False)
+    for idx, (uid, data) in enumerate(sorted_users, start=1):
+    user = await bot.fetch_user(int(uid))
+    embed.add_field(
+        name=f"{idx}. {user.display_name}",
+        value=f"레벨 {data['level']} | XP: {data['xp']}/{required_xp(data['level'])}",
+        inline=False
+    )
 
     await interaction.response.send_message(embed=embed)
 
