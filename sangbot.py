@@ -67,8 +67,9 @@ def load_data():
     return {}
 
 def save_data(data):
-    with open(XP_FILE, "w") as f:
-        json.dump(data, f)
+    with open(XP_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
 
 xp_data = load_data()
 
@@ -128,12 +129,12 @@ async def 랭킹(interaction: discord.Interaction):
 
     embed = discord.Embed(title="🏆 경험치 랭킹 TOP 10", color=discord.Color.gold())
     for idx, (uid, data) in enumerate(sorted_users, start=1):
-    user = await bot.fetch_user(int(uid))
-    embed.add_field(
-        name=f"{idx}. {user.display_name}",
-        value=f"레벨 {data['level']} | XP: {data['xp']}/{required_xp(data['level'])}",
-        inline=False
-    )
+        user = await bot.fetch_user(int(uid))
+        embed.add_field(
+            name=f"{idx}. {user.display_name}",
+            value=f"레벨 {data['level']} | XP: {data['xp']}/{required_xp(data['level'])}",
+            inline=False
+        )
 
     await interaction.response.send_message(embed=embed)
 
@@ -147,7 +148,6 @@ class RerollView(discord.ui.View):
         self.k = k
         self.allow_duplicate = allow_duplicate
 
-    @discord.ui.button(label="🔁 다시 뽑기", style=discord.ButtonStyle.primary)
     @discord.ui.button(label="🔁 다시 뽑기", style=discord.ButtonStyle.primary)
     async def reroll(self, interaction: discord.Interaction, button: discord.ui.Button):
         result_text = get_lottery_result(self.names, self.k, self.allow_duplicate)
