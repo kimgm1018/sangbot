@@ -45,15 +45,55 @@ async def 안녕(interaction: discord.Interaction):
     await interaction.response.send_message(f"안녕하세요, {username}님! 👋")
 
 # 롤 ck
-@bot.tree.command(name = "ck", description="ck 뽑기")
-@app_commands.describe(명단 = "Blue팀과 Red팀 참가인원을 순서대로 입력 *10명")
-async def ck(interaction : discord.Interaction, 명단 : str):
+@bot.tree.command(name="ck", description="ck 뽑기 (라인 고정 가능)")
+@app_commands.describe(명단="10명의 이름을 입력하세요. 고정할 경우 이름 뒤에 *를 붙이세요.")
+async def ck(interaction: discord.Interaction, 명단: str):
     names = 명단.strip().split()
-    a = names[:5]
-    b = names[5:]
-    random.shuffle(a)
-    random.shuffle(b)
-    await interaction.response.send_message(f"Red팀 TOP : {a.pop()} - Blue팀 TOP : {b.pop()} \nRed팀 JUNGLE : {a.pop()} - Blue팀 JUNGLE : {b.pop()} \nRed팀 MID : {a.pop()} - Blue팀 MID : {b.pop()} \nRed팀 AD : {a.pop()} - Blue팀 AD : {b.pop()} \nRed팀 SUPPORT : {a.pop()} - Blue팀 SUPPORT : {b.pop()} ")
+
+    if len(names) != 10:
+        await interaction.response.send_message("❗ 정확히 10명을 입력해주세요.", ephemeral=True)
+        return
+
+    positions = ["TOP", "JUNGLE", "MID", "AD", "SUPPORT"]
+    red_fixed = [None] * 5
+    blue_fixed = [None] * 5
+    red_pool = []
+    blue_pool = []
+
+    # 0~4: Red팀, 5~9: Blue팀
+    for i, raw_name in enumerate(names):
+        fixed = raw_name.endswith("*")
+        name = raw_name.rstrip("*")
+        team = "red" if i < 5 else "blue"
+        idx = i % 5  # 포지션 인덱스
+
+        if fixed:
+            if team == "red":
+                red_fixed[idx] = name
+            else:
+                blue_fixed[idx] = name
+        else:
+            if team == "red":
+                red_pool.append(name)
+            else:
+                blue_pool.append(name)
+
+    # 섞고 고정되지 않은 자리 채우기
+    random.shuffle(red_pool)
+    random.shuffle(blue_pool)
+
+    for i in range(5):
+        if red_fixed[i] is None:
+            red_fixed[i] = red_pool.pop()
+        if blue_fixed[i] is None:
+            blue_fixed[i] = blue_pool.pop()
+
+    # 출력 포맷
+    lines = []
+    for i, pos in enumerate(positions):
+        lines.append(f"Red팀 {pos} : {red_fixed[i]} - Blue팀 {pos} : {blue_fixed[i]}")
+
+    await interaction.response.send_message("\n".join(lines))
 
 # 경험치
 
