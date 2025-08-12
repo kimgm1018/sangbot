@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import random
 import datetime
-from datetime import datetime, timedelta, timezone
+from datetime import datetime, timedelta, timezone as dt_timezone
 import json
 import requests
 import math
@@ -18,13 +18,13 @@ from langchain.prompts import PromptTemplate
 from langchain_openai import ChatOpenAI
 
 
-KST = timezone("Asia/Seoul")
+KST = pytz.timezone("Asia/Seoul")
 ATTENDANCE_FILE = "attendance_log.json"
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 chat_api = os.getenv("OPENAI_API_KEY")
-chanel_id = os.getenv("CHANEL_ID")
+chanel_id = int(os.getenv("CHANEL_ID"))
 
 print("🔍 토큰 값:", repr(token))
 
@@ -41,8 +41,8 @@ async def get_yesterday_logs():
     y_start = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
     y_end = y_start + timedelta(days=1)
 
-    after_dt = y_start.astimezone(timezone.utc)
-    before_dt = y_end.astimezone(timezone.utc)
+    after_dt = y_start.astimezone(dt_timezone.utc)
+    before_dt = y_end.astimezone(dt_timezone.utc)
 
     channel = await bot.fetch_channel(chanel_id)
     rows = []
