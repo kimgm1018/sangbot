@@ -837,7 +837,7 @@ async def daily_report():
             post_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
             await post_channel.send(result.content)
 
-@ 연습 커맨드
+# @ 연습 커맨드
 @bot.command(name="신문테스트")
 async def 신문테스트(ctx):
     df = await get_yesterday_logs()
