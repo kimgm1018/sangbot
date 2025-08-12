@@ -3,7 +3,7 @@ from discord.ext import commands, tasks
 from discord import app_commands
 import random
 import datetime
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import json
 import requests
 import math
@@ -12,6 +12,10 @@ import os
 from dotenv import load_dotenv
 import asyncio
 from pytz import timezone
+import pandas as pd
+from typing import Optional, Iterabl
+from langchain.prompt import PromptTemplate
+from langchain_openai import ChatOpenAI
 
 
 KST = timezone("Asia/Seoul")
@@ -19,6 +23,8 @@ ATTENDANCE_FILE = "attendance_log.json"
 
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
+chat_api = os.getenv("OPENAI_API_KEY")
+chanel_id = os.getenv("CHANEL_ID")
 
 print("🔍 토큰 값:", repr(token))
 
@@ -27,6 +33,83 @@ intents = discord.Intents.default()
 intents.message_content = True
 intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
+
+# ------------------ log ------------------------------------
+
+async def get_yesterday_logs():
+    now_kst = datetime.now(KST)
+    y_start = now_kst.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(days=1)
+    y_end = y_start + timedelta(days=1)
+
+    after_dt = y_start.astimezone(timezone.utc)
+    before_dt = y_end.astimezone(timezone.utc)
+
+    channel = await bot.fetch_channel(chanel_id)
+    rows = []
+    async for m in channel.history(limit=None, oldest_first=True, after=after_dt, before=before_dt):
+        rows.append({
+            "created_at": m.created_at.isoformat(),
+            "author_name": str(m.author),
+            "author_id": m.author.id,
+            "content": m.content
+        })
+    return pd.DataFrame(rows) if rows else None
+
+# ------------------ chat bot --------------------------------
+
+sang_llm = ChatOpenAI(model="gpt-4o-mini", api_key=chat_api)
+user_info = """
+gimcansun = 234296335015084032 = 찬우
+angijaie =  949572729084977152 = 기제
+dongmini1210 = 522745481185460235= 동민
+jingu_._ = 490864541450764288 = 현진
+pn__uu = 696366030469070928 = 현웅
+hyeonwoo353 = 373847797125873666 = 현우
+k.h.s = 493182332870721554 = 현수
+hi200000 = 493182332870721554 = 현수
+sonjeongho1497 = 820230276533714956 = 정호
+sonjeonghyeon3440 = 696367605845590059 = 정현
+jaehyeog3012 = 628935601466376225 = 재민
+dmlwls_ = 426761671302971393 = 의진
+gangyunsu1225 = 302824660251443202 = 윤수
+illeobeolinbyeol = 523115207808122890 = 영훈
+tmdgns.o_o = 543980517939478540 = 승훈
+sehanjeong = 488368042280091651 = 세한
+seongyeob1347 = 977945016028786728 = 성엽
+tjdrb1234 = 1296034165371961367 = 성규
+ansangin_ = 522629953489993730 = 상인
+msb8338 = 674946535171293184 = 상보
+coesanha_ = 696422375566213200 = 산하
+keykimkeyminkeyseong = 306108167677280256 = 민성
+gwak1. = 333158929884381188 = 동현
+gweondongu. = 718826557141024899 = 동우
+""" 
+
+sang_prompt = PromptTemplate(
+    input_variables=["log", "user_info"],
+    template="""
+당신은 신문 기자입니다. 당신은 하루동안 있었던 채팅 로그를 보고, 신문으로 만드는 역할을 가지고 있습니다.
+해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다. 인물들의 발언을 중심으로 신문을 만들어 보세요.
+이것은 해당 채팅 로그입니다. {log}
+
+채팅 log에 담겨있는 author_name에 대해서는 {user_info}를 참고하여 이름으로 변환하여 사용하십시오.
+이름을 변환하여 사용할 때, 문장이 자연스럽도록 조사를 잘 붙이십시오.
+
+해당 로그를 보고 신문을 만들어 보세요
+
+형식은 다음과 같습니다.
+
+[날짜] : 날짜
+[기자] : [Sangbot]
+[내용] : 1. 2. 3. 등으로 섹션을 나누어서 작성할 것
+
+[후원 계좌] : 카카오뱅크 3333-07-298682 (김강민)
+"""
+)
+sangchain = sang_prompt | sang_llm
+
+
+# ------------------------------- chat bot ------------------------------------
 
 # ! 명령어 정의
 @bot.command(name = '안녕')
@@ -742,6 +825,35 @@ async def 출석률(interaction: discord.Interaction, 대상: discord.User = Non
 
     await interaction.followup.send(embed=embed)
 
+# 뉴스 루프
+@tasks.loop(minutes=1)
+async def daily_report():
+    now = datetime.now(KST)
+    if now.hour == 0 and now.minute == 0:  # 자정
+        df = await get_yesterday_logs()
+        if df is not None and not df.empty:
+            table_md = df.to_markdown(index=False)
+            result = sangchain.invoke({"log": table_md, "user_info": user_info})
+            post_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
+            await post_channel.send(result.content)
+
+@ 연습 커맨드
+@bot.command(name="신문테스트")
+async def 신문테스트(ctx):
+    df = await get_yesterday_logs()
+    if df is not None and not df.empty:
+        table_md = df.to_markdown(index=False)
+        result = sangchain.invoke({"log": table_md, "user_info": user_info})
+
+        # ✅ 콘솔에 내용 출력
+        print("\n========== 생성된 신문 미리보기 ==========")
+        print(result.content)
+        print("========================================\n")
+
+        await ctx.send("✅ 콘솔에 신문 내용이 출력되었습니다.")
+    else:
+        await ctx.send("❗ 어제 로그가 없습니다.")
+
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
 async def on_ready():
@@ -753,6 +865,7 @@ async def on_ready():
         print("명령어 등록 실패:", e)
     check_events.start()
     clean_old_events.start()
-
+    daily_report.start() 
+    
 bot.run(token)
 
