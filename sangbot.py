@@ -59,6 +59,7 @@ async def get_yesterday_logs():
 
 sang_llm = ChatOpenAI(model="gpt-4o-mini", api_key=chat_api)
 user_info = """
+user_author_name = user_id = user_name
 gimcansun = 234296335015084032 = 찬우
 angijaie =  949572729084977152 = 기제
 dongmini1210 = 522745481185460235= 동민
@@ -89,10 +90,10 @@ sang_prompt = PromptTemplate(
     input_variables=["log", "user_info"],
     template="""
 당신은 신문 기자입니다. 당신은 하루동안 있었던 채팅 로그를 보고, 신문으로 만드는 역할을 가지고 있습니다.
-해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다. 인물들의 발언을 중심으로 신문을 만들어 보세요.
+해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다. 인물들의 발언을 중심으로 발언과 문맥을 살려 신문을 만들어 보세요.
 이것은 해당 채팅 로그입니다. {log}
 
-채팅 log에 담겨있는 author_name에 대해서는 {user_info}를 참고하여 이름으로 변환하여 사용하십시오.
+채팅 log에 담겨있는 user_author_name, user_id에 대해서는 {user_info}를 참고하여 그에 대응하는 이름으로 변환하여 사용하십시오.
 이름을 변환하여 사용할 때, 문장이 자연스럽도록 조사를 잘 붙이십시오.
 
 해당 로그를 보고 신문을 만들어 보세요
