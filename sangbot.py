@@ -11,7 +11,7 @@ import json
 import os
 from dotenv import load_dotenv
 import asyncio
-from pytz import timezone
+import pytz
 import pandas as pd
 from typing import Optional
 from langchain.prompts import PromptTemplate
