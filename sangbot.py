@@ -13,7 +13,7 @@ from dotenv import load_dotenv
 import asyncio
 from pytz import timezone
 import pandas as pd
-from typing import Optional, Iterabl
+from typing import Optional
 from langchain.prompt import PromptTemplate
 from langchain_openai import ChatOpenAI
 
