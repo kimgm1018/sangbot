@@ -53,50 +53,46 @@ async def get_yesterday_logs():
             "author_id": m.author.id,
             "content": m.content
         })
-    return pd.DataFrame(rows) if rows else None
+        
+    df = pd.DataFrame(rows) if rows else None
+    if df is None or df.empty:
+        return None
+        
+    df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+    df = df.sort_values("created_at", ascending=True).reset_index(drop=True)
+
+    # 사용자 매핑 적용
+    df = apply_user_mapping(df)
+    return df
+
+def df_to_markdown(df: pd.DataFrame) -> str:
+    """pandas.to_markdown(tabulate 필요) 사용, 미설치 시 폴백"""
+    try:
+        return df[["created_at", "author_name", "content"]].to_markdown(index=False)
+    except Exception:
+        # 간단 폴백
+        lines = ["| created_at | author_name | content |", "|---|---|---|"]
+        for _, r in df.iterrows():
+            lines.append(f"| {r['created_at']} | {r['author_name']} | {r['content']} |")
+        return "\n".join(lines)
+
 
 # ------------------ chat bot --------------------------------
 
 sang_llm = ChatOpenAI(model="gpt-4o-mini", api_key=chat_api)
-user_info = """
-user_author_name = user_id = user_name
-gimcansun = 234296335015084032 = 찬우
-angijaie =  949572729084977152 = 기제
-dongmini1210 = 522745481185460235= 동민
-jingu_._ = 490864541450764288 = 현진
-pn__uu = 696366030469070928 = 현웅
-hyeonwoo353 = 373847797125873666 = 현우
-k.h.s = 493182332870721554 = 현수
-hi200000 = 493182332870721554 = 현수
-sonjeongho1497 = 820230276533714956 = 정호
-sonjeonghyeon3440 = 696367605845590059 = 정현
-jaehyeog3012 = 628935601466376225 = 재민
-dmlwls_ = 426761671302971393 = 의진
-gangyunsu1225 = 302824660251443202 = 윤수
-illeobeolinbyeol = 523115207808122890 = 영훈
-tmdgns.o_o = 543980517939478540 = 승훈
-sehanjeong = 488368042280091651 = 세한
-seongyeob1347 = 977945016028786728 = 성엽
-tjdrb1234 = 1296034165371961367 = 성규
-ansangin_ = 522629953489993730 = 상인
-msb8338 = 674946535171293184 = 상보
-coesanha_ = 696422375566213200 = 산하
-keykimkeyminkeyseong = 306108167677280256 = 민성
-gwak1. = 333158929884381188 = 동현
-gweondongu. = 718826557141024899 = 동우
-""" 
 
 sang_prompt = PromptTemplate(
-    input_variables=["log", "user_info"],
+    input_variables=["log"],
     template="""
 당신은 신문 기자입니다. 당신은 하루동안 있었던 채팅 로그를 보고, 신문으로 만드는 역할을 가지고 있습니다.
-해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다. 인물들의 발언을 중심으로 발언과 문맥을 살려 신문을 만들어 보세요.
-이것은 해당 채팅 로그입니다. {log}
+해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다.
+해당 로그의 시간 순서대로 대화를 파악하고, 인물들의 발언을 중심으로 신문을 만들어 보세요.
 
-채팅 log에 담겨있는 user_author_name, user_id에 대해서는 {user_info}를 참고하여 그에 대응하는 이름으로 변환하여 사용하십시오.
+이것은 해당 채팅 로그입니다.
+{log}
+
 이름을 변환하여 사용할 때, 문장이 자연스럽도록 조사를 잘 붙이십시오.
-
-해당 로그를 보고 신문을 만들어 보세요
+해당 로그를 보고 대화를 요약하여 사건이라고 생각되는 것들을 모아 신문처럼 만드십시오.
 
 형식은 다음과 같습니다.
 
@@ -105,8 +101,9 @@ sang_prompt = PromptTemplate(
 [내용] : 1. 2. 3. 등으로 섹션을 나누어서 작성할 것
 
 [후원 계좌] : 카카오뱅크 3333-07-298682 (김강민)
-"""
+""",
 )
+
 sangchain = sang_prompt | sang_llm
 
 
@@ -834,7 +831,7 @@ async def daily_report():
         df = await get_yesterday_logs()
         if df is not None and not df.empty:
             table_md = df.to_markdown(index=False)
-            result = sangchain.invoke({"log": table_md, "user_info": user_info})
+            result = sangchain.invoke({"log": table_md})
             post_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
             await post_channel.send(result.content)
 
@@ -844,7 +841,7 @@ async def 신문테스트(ctx):
     df = await get_yesterday_logs()
     if df is not None and not df.empty:
         table_md = df.to_markdown(index=False)
-        result = sangchain.invoke({"log": table_md, "user_info": user_info})
+        result = sangchain.invoke({"log": table_md})
 
         # ✅ 콘솔에 내용 출력
         print("\n========== 생성된 신문 미리보기 ==========")
