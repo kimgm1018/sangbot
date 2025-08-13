@@ -387,7 +387,7 @@ async def 익명(interaction: discord.Interaction, 내용: str):
     embed = discord.Embed(
         title="📢 익명 메시지",
         description=내용,
-        color=discord.Color.dark_embed()
+        color=discord.Color.dark_gray()
     )
     embed.set_footer(text="보낸 사람 정보는 저장되지 않습니다")
 
@@ -881,25 +881,18 @@ async def daily_report():
         if df is not None and not df.empty:
             table_md = df.to_markdown(index=False)
             result = sangchain.invoke({"log": table_md})
-            post_channel = await bot.fetch_channel(TARGET_CHANNEL_ID)
+            post_channel = await bot.fetch_channel(chanel_id)
             await post_channel.send(result.content)
 
-# @ 연습 커맨드
-@bot.command(name="신문테스트")
-async def 신문테스트(ctx):
-    df = await get_yesterday_logs()
+@bot.command()
+async def 뉴스(ctx):
+    df = await get_yesterday_logs()  # 어제 채팅 로그 불러오기
     if df is not None and not df.empty:
         table_md = df.to_markdown(index=False)
         result = sangchain.invoke({"log": table_md})
-
-        # ✅ 콘솔에 내용 출력
-        print("\n========== 생성된 신문 미리보기 ==========")
-        print(result.content)
-        print("========================================\n")
-
-        await ctx.send("✅ 콘솔에 신문 내용이 출력되었습니다.")
+        await ctx.send(result.content)  # 현재 명령어 친 채널로 전송
     else:
-        await ctx.send("❗ 어제 로그가 없습니다.")
+        await ctx.send("어제 기록이 없습니다.")
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
