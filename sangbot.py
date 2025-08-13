@@ -35,6 +35,24 @@ intents.members = True
 bot = commands.Bot(command_prefix="!", intents=intents)
 
 # ------------------ log ------------------------------------
+def apply_user_mapping(df: pd.DataFrame) -> pd.DataFrame:
+    # author_name → 이름
+    df["author_name"] = df["author_name"].map(lambda x: user_info_dict.get(x, (None, x))[1])
+
+    # author_id → 이름
+    df["author_id"] = df["author_id"].map(lambda x: id_to_name.get(x, x))
+
+    # content 안의 <@숫자> 치환
+    import re
+    def replace_ids_in_text(text):
+        def repl(match):
+            uid = int(match.group(1))
+            return f"<@{id_to_name.get(uid, uid)}>"
+        return re.sub(r"<@(\d+)>", repl, str(text))
+
+    df["content"] = df["content"].apply(replace_ids_in_text)
+
+    return df
 
 async def get_yesterday_logs():
     now_kst = datetime.now(KST)
