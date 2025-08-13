@@ -42,7 +42,6 @@ user_info_dict = {
     "pn__uu": (696366030469070928, "현웅"),
     "hyeonwoo353": (373847797125873666, "현우"),
     "k.h.s": (493182332870721554, "현수"),
-    "hi200000": (493182332870721554, "현수"),
     "sonjeongho1497": (820230276533714956, "정호"),
     "sonjeonghyeon3440": (696367605845590059, "정현"),
     "jaehyeog3012": (628935601466376225, "재민"),
@@ -59,7 +58,9 @@ user_info_dict = {
     "keykimkeyminkeyseong": (306108167677280256, "민성"),
     "gwak1.": (333158929884381188, "동현"),
     "gweondongu.": (718826557141024899, "동우"),
-    "dingdong119" : (364237611499388930, "강민")
+    "dingdong119" : (364237611499388930, "강민"),
+    "jaemmin0" : (628935601466376225, '재민'),
+    "jaehyeog3012" : (704998711734042634, '재혁')
 }
 
 # ID → 이름
@@ -82,6 +83,19 @@ def apply_user_mapping(df: pd.DataFrame) -> pd.DataFrame:
         return re.sub(r"<@(\d+)>", repl, str(text))
 
     df["content"] = df["content"].apply(replace_ids_in_text)
+
+    if not df.empty:
+        # 1. 문자열을 datetime으로 변환
+        df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+    
+        # 2. UTC → KST 변환
+        df["created_at"] = df["created_at"].dt.tz_convert("Asia/Seoul")
+    
+        # 3. 보기 좋게 문자열로 포맷 (선택 사항)
+        df["created_at"] = df["created_at"].dt.strftime("%Y-%m-%d %H:%M:%S")
+
+    else:
+        print("조회 결과가 없습니다.")
 
     return df
 
@@ -128,20 +142,19 @@ def df_to_markdown(df: pd.DataFrame) -> str:
 
 # ------------------ chat bot --------------------------------
 
-sang_llm = ChatOpenAI(model="gpt-4o-mini", api_key=chat_api)
+sang_llm = ChatOpenAI(model="gpt-4o", api_key=chat_api)
 
 sang_prompt = PromptTemplate(
     input_variables=["log"],
     template="""
-당신은 신문 기자입니다. 당신은 하루동안 있었던 채팅 로그를 보고, 신문으로 만드는 역할을 가지고 있습니다.
+하루의 대화를 요약하는 챗봇입니다. 당신은 하루동안 있었던 채팅 로그를 보고, 시간 순서에 맞춰 어떤 상황인지를 파악하고 그 상황을 모아 전달하는 역활을 합니다.
 해당 로그에 나오는 인물들의 이름은 모두가 알고 있기에 자세한 설명은 필요 없습니다.
-해당 로그의 시간 순서대로 대화를 파악하고, 인물들의 발언을 중심으로 신문을 만들어 보세요.
+해당 로그의 시간 순서대로 대화를 파악하고, 인물들의 발언을 중심으로 상황을 정리해보세요.
+이것은 해당 채팅 로그입니다. {log}
 
-이것은 해당 채팅 로그입니다.
-{log}
+이름을 변환하여 사용할 떄, 문장이 자연스럽도록 조사를 잘 붙이십시오.
 
-이름을 변환하여 사용할 때, 문장이 자연스럽도록 조사를 잘 붙이십시오.
-해당 로그를 보고 대화를 요약하여 사건이라고 생각되는 것들을 모아 신문처럼 만드십시오.
+해당 로그를 보고 대화를 요약하여 사건이라고 생각 되는 것들을 모아 신문처럼 만드십시오.
 
 형식은 다음과 같습니다.
 
