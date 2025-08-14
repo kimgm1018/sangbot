@@ -121,7 +121,7 @@ async def get_yesterday_logs():
     if df is None or df.empty:
         return None
         
-    df["created_at"] = pd.to_datetime(df["created_at"], utc=True)
+    df["created_at"] = pd.to_datetime(df["created_at"], format="mixed", utc=True)
     df = df.sort_values("created_at", ascending=True).reset_index(drop=True)
 
     # 사용자 매핑 적용
@@ -899,15 +899,15 @@ async def daily_report():
             post_channel = await bot.fetch_channel(chanel_id)
             await post_channel.send(result.content)
 
-# @bot.command()
-# async def 뉴스(ctx):
-#     df = await get_yesterday_logs()  # 어제 채팅 로그 불러오기
-#     if df is not None and not df.empty:
-#         table_md = df.to_markdown(index=False)
-#         result = sangchain.invoke({"log": table_md})
-#         await ctx.send(result.content)  # 현재 명령어 친 채널로 전송
-#     else:
-#         await ctx.send("어제 기록이 없습니다.")
+@bot.command()
+async def 뉴스(ctx):
+    df = await get_yesterday_logs()  # 어제 채팅 로그 불러오기
+    if df is not None and not df.empty:
+        table_md = df.to_markdown(index=False)
+        result = sangchain.invoke({"log": table_md})
+        await ctx.send(result.content)  # 현재 명령어 친 채널로 전송
+    else:
+        await ctx.send("어제 기록이 없습니다.")
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
