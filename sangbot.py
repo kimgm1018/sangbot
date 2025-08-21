@@ -24,7 +24,8 @@ ATTENDANCE_FILE = "attendance_log.json"
 load_dotenv()
 token = os.getenv("DISCORD_TOKEN")
 chat_api = os.getenv("OPENAI_API_KEY")
-chanel_id = int(os.getenv("CHANEL_ID"))
+scrab_chanel_id = int(os.getenv("SCRAB_CHANEL_ID"))
+post_chanel_id = int(os.getenv("POST_CHANEL_ID"))
 
 print("🔍 토큰 값:", repr(token))
 
@@ -106,7 +107,7 @@ async def get_yesterday_logs():
     after_dt = y_start.astimezone(dt_timezone.utc)
     before_dt = y_end.astimezone(dt_timezone.utc)
 
-    channel = await bot.fetch_channel(1227686711279222784)
+    channel = await bot.fetch_channel(scrab_chanel_id)
     rows = []
     async for m in channel.history(limit=None, oldest_first=True, after=after_dt, before=before_dt):
         rows.append({
@@ -895,7 +896,7 @@ async def daily_report():
         if df is not None and not df.empty:
             table_md = df.to_markdown(index=False)
             result = sangchain.invoke({"log": table_md})
-            post_channel = await bot.fetch_channel(chanel_id)
+            post_channel = await bot.fetch_channel(post_chanel_id)
             await post_channel.send(result.content)
 
 @bot.command()
