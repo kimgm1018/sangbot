@@ -142,7 +142,7 @@ def df_to_markdown(df: pd.DataFrame) -> str:
 
 # ------------------ chat bot --------------------------------
 
-sang_llm = ChatOpenAI(model="gpt-4o", api_key=chat_api)
+sang_llm = ChatOpenAI(model="gpt-5", api_key=chat_api)
 
 sang_prompt = PromptTemplate(
     input_variables=["log"],
