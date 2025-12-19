@@ -275,6 +275,497 @@ async def 랭킹(interaction: discord.Interaction):
     await interaction.response.send_message(embed=embed)
 
 
+# ==================== 검 키우기 게임 ====================
+
+SWORD_FILE = "sword_data.json"
+SWORD_ATTRIBUTES = ["빛", "어둠", "피", "자연", "마"]
+
+# 검 게임 데이터 로딩/저장 함수
+def load_sword_data():
+    if os.path.exists(SWORD_FILE):
+        with open(SWORD_FILE, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_sword_data(data):
+    with open(SWORD_FILE, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+sword_data = load_sword_data()
+
+# 강화 확률 함수
+def get_enhancement_rate(current_level):
+    rates = {
+        0: 100,   # 0->1: 100%
+        1: 90,    # 1->2: 90%
+        2: 85,    # 2->3: 85%
+        3: 80,    # 3->4: 80%
+        4: 75,    # 4->5: 75%
+        5: 70,    # 5->6: 70%
+        6: 65,    # 6->7: 65%
+        7: 60,    # 7->8: 60%
+        8: 50,    # 8->9: 55%
+        9: 40,    # 9->10: 50%
+        10: 30,   # 10->11: 45%
+        11: 20,   # 11->12: 40%
+        12: 10,   # 12->13: 35%
+        13: 5,   # 13->14: 30%
+        14: 3     # 14->15: 4%
+    }
+    return rates.get(current_level, 0)
+
+# 강화 유지 확률 (실패 시 레벨 유지할 확률)
+def get_maintain_rate(current_level):
+    if current_level <= 5:
+        return 0  # 낮은 레벨은 유지 없음
+    elif current_level <= 10:
+        return 10  # 중간 레벨은 10%
+    else:
+        return 15  # 높은 레벨은 15%
+
+# 강화 비용 계산
+def get_enhancement_cost(current_level):
+    if current_level == 0:
+        return 10  # 0->1: 10골드
+    elif current_level == 14:
+        return 100000  # 14->15: 10만골드
+    else:
+        # 0->1은 10골, 14->15는 10만골 사이를 지수적으로 증가
+        base = 10
+        target = 100000
+        return int(base * ((target / base) ** (current_level / 14)))
+
+# 검 판매 가격 계산
+def get_sword_price(level):
+    if level == 0:
+        return 0
+    elif level == 1:
+        return 50
+    elif level == 15:
+        return 700000
+    else:
+        # 1레벨 50골, 15레벨 70만골 사이를 지수적으로 증가
+        base = 50
+        target = 700000
+        return int(base * ((target / base) ** ((level - 1) / 14)))
+
+# 결투 승률 계산 (레벨 차이 기반)
+def calculate_duel_win_rate(attacker_level, defender_level):
+    level_diff = attacker_level - defender_level
+    if level_diff >= 5:
+        return 0.95  # 5레벨 이상 차이면 95%
+    elif level_diff >= 3:
+        return 0.85  # 3레벨 이상 차이면 85%
+    elif level_diff >= 1:
+        return 0.70  # 1레벨 이상 차이면 70%
+    elif level_diff == 0:
+        return 0.50  # 같은 레벨이면 50%
+    elif level_diff >= -1:
+        return 0.30  # 1레벨 낮으면 30%
+    elif level_diff >= -3:
+        return 0.15  # 3레벨 낮으면 15%
+    else:
+        return 0.05  # 5레벨 이상 낮으면 5%
+
+# 결투 골드 획득량 계산
+def calculate_duel_gold(winner_level, loser_level, loser_gold):
+    level_diff = winner_level - loser_level
+    if level_diff > 0:
+        # 레벨이 높은 사람이 이긴 경우: 소량
+        steal_rate = 0.05 + (level_diff * 0.01)  # 5% + 레벨차이당 1%
+        steal_rate = min(steal_rate, 0.15)  # 최대 15%
+    else:
+        # 레벨이 낮은 사람이 이긴 경우: 많은 양
+        steal_rate = 0.20 + (abs(level_diff) * 0.05)  # 20% + 레벨차이당 5%
+        steal_rate = min(steal_rate, 0.40)  # 최대 50%
+    
+    return int(loser_gold * steal_rate)
+
+# 서버의 왕(15레벨) 찾기
+def find_king(server_id):
+    for uid, data in sword_data.items():
+        if data.get("server_id") == server_id and data.get("sword_level", 0) == 15:
+            return uid
+    return None
+
+# 하루 결투 횟수 초기화 (자정 체크)
+def reset_daily_duel_count(uid):
+    today = datetime.now(KST).date()
+    user_data = sword_data.get(uid, {})
+    last_duel_date = user_data.get("last_duel_date")
+    
+    if last_duel_date != str(today):
+        user_data["duel_count_today"] = 0
+        user_data["last_duel_date"] = str(today)
+        sword_data[uid] = user_data
+        save_sword_data(sword_data)
+
+# 검 시작 명령어
+@bot.tree.command(name="검시작", description="검 키우기 게임을 시작합니다")
+async def 검시작(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    server_id = interaction.guild.id
+    
+    if uid in sword_data:
+        await interaction.response.send_message("❗ 이미 게임을 시작하셨습니다! `/검정보` 명령어로 현재 상태를 확인하세요.")
+        return
+    
+    sword_data[uid] = {
+        "gold": 100000,
+        "sword_level": 0,
+        "sword_attribute": None,
+        "server_id": server_id,
+        "duel_count_today": 0,
+        "last_duel_date": str(datetime.now(KST).date())
+    }
+    save_sword_data(sword_data)
+    
+    embed = discord.Embed(
+        title="⚔️ 검 키우기 게임 시작!",
+        description=f"{interaction.user.display_name} 님이 게임을 시작했습니다!",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="💰 시작 골드", value="100,000 골드", inline=False)
+    embed.add_field(name="⚔️ 검 레벨", value="0 레벨 (속성 없음)", inline=False)
+    embed.add_field(name="💡 다음 단계", value="`/강화` 명령어로 검을 강화하세요!", inline=False)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 검 정보 명령어
+@bot.tree.command(name="검정보", description="내 검 정보를 확인합니다")
+async def 검정보(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    
+    if uid not in sword_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    user_data = sword_data[uid]
+    level = user_data.get("sword_level", 0)
+    attribute = user_data.get("sword_attribute", "없음")
+    gold = user_data.get("gold", 0)
+    
+    embed = discord.Embed(
+        title=f"⚔️ {interaction.user.display_name} 님의 검 정보",
+        color=discord.Color.blue()
+    )
+    embed.add_field(name="💰 골드", value=f"{gold:,} 골드", inline=True)
+    embed.add_field(name="⚔️ 검 레벨", value=f"{level} 레벨", inline=True)
+    embed.add_field(name="✨ 속성", value=attribute if attribute != "없음" else "속성 없음", inline=True)
+    
+    if level == 15:
+        embed.add_field(name="👑 칭호", value="왕의 검", inline=False)
+    
+    if level < 15:
+        next_rate = get_enhancement_rate(level)
+        next_cost = get_enhancement_cost(level)
+        embed.add_field(name="📈 다음 강화", value=f"성공률: {next_rate}% | 비용: {next_cost:,} 골드", inline=False)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 강화 명령어
+@bot.tree.command(name="강화", description="검을 강화합니다")
+async def 강화(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    server_id = interaction.guild.id
+    
+    if uid not in sword_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    user_data = sword_data[uid]
+    # 서버 ID 업데이트 (기존 데이터 호환성)
+    user_data["server_id"] = server_id
+    current_level = user_data.get("sword_level", 0)
+    
+    if current_level >= 15:
+        await interaction.response.send_message("❗ 이미 최고 레벨(15레벨)입니다!")
+        return
+    
+    # 강화 비용 확인
+    enhancement_cost = get_enhancement_cost(current_level)
+    current_gold = user_data.get("gold", 0)
+    
+    if current_gold < enhancement_cost:
+        await interaction.response.send_message(f"❗ 강화 비용이 부족합니다! 필요 골드: {enhancement_cost:,} 골드 (보유: {current_gold:,} 골드)")
+        return
+    
+    # 강화 비용 차감
+    user_data["gold"] = current_gold - enhancement_cost
+    
+    success_rate = get_enhancement_rate(current_level)
+    maintain_rate = get_maintain_rate(current_level)
+    roll = random.randint(1, 100)
+    
+    embed = discord.Embed(title="⚔️ 강화 결과", color=discord.Color.orange())
+    embed.add_field(name="💰 강화 비용", value=f"{enhancement_cost:,} 골드 소모", inline=False)
+    
+    # 성공
+    if roll <= success_rate:
+        new_level = current_level + 1
+        user_data["sword_level"] = new_level
+        
+        # 0->1 강화 시 속성 부여
+        if current_level == 0 and new_level == 1:
+            attribute = random.choice(SWORD_ATTRIBUTES)
+            user_data["sword_attribute"] = attribute
+            embed.add_field(name="✨ 속성 부여!", value=f"**{attribute}** 속성이 부여되었습니다!", inline=False)
+        
+        # 15레벨 달성 시 왕의 검 체크
+        if new_level == 15:
+            king_uid = find_king(server_id)
+            if king_uid and king_uid != uid:
+                # 기존 왕과 자동 결투
+                king_data = sword_data[king_uid]
+                embed.add_field(
+                    name="⚔️ 왕의 검 결투 발생!",
+                    value=f"기존 왕 <@{king_uid}>과 자동으로 결투가 시작됩니다!",
+                    inline=False
+                )
+                
+                # 결투 진행
+                attacker_win_rate = calculate_duel_win_rate(new_level, king_data.get("sword_level", 0))
+                duel_roll = random.random()
+                
+                if duel_roll < attacker_win_rate:
+                    # 새 왕 승리
+                    stolen_gold = calculate_duel_gold(new_level, king_data.get("sword_level", 0), king_data.get("gold", 0))
+                    user_data["gold"] = user_data.get("gold", 0) + stolen_gold
+                    king_data["gold"] = max(0, king_data.get("gold", 0) - stolen_gold)
+                    king_data["sword_level"] = 8  # 패자는 8레벨부터 재시작
+                    king_data["sword_attribute"] = None  # 속성 초기화
+                    
+                    embed.add_field(
+                        name="👑 새로운 왕 등극!",
+                        value=f"승리! {stolen_gold:,} 골드를 획득했습니다!\n기존 왕은 8레벨부터 재시작합니다.",
+                        inline=False
+                    )
+                else:
+                    # 기존 왕 승리
+                    user_data["sword_level"] = 8  # 패자는 8레벨부터 재시작
+                    user_data["sword_attribute"] = None
+                    stolen_gold = calculate_duel_gold(king_data.get("sword_level", 0), new_level, user_data.get("gold", 0))
+                    king_data["gold"] = king_data.get("gold", 0) + stolen_gold
+                    user_data["gold"] = max(0, user_data.get("gold", 0) - stolen_gold)
+                    
+                    embed.add_field(
+                        name="👑 기존 왕의 승리",
+                        value=f"패배... 기존 왕이 승리했습니다. 8레벨부터 재시작합니다.",
+                        inline=False
+                    )
+                
+                sword_data[king_uid] = king_data
+            else:
+                embed.add_field(
+                    name="👑 왕의 검 획득!",
+                    value="축하합니다! 당신이 이 서버의 왕이 되었습니다!",
+                    inline=False
+                )
+        
+        embed.add_field(
+            name="✅ 강화 성공!",
+            value=f"{current_level}레벨 → **{new_level}레벨**",
+            inline=False
+        )
+        embed.color = discord.Color.green()
+    
+    # 실패 (유지 가능)
+    elif roll <= success_rate + maintain_rate:
+        embed.add_field(
+            name="⚠️ 강화 실패 (레벨 유지)",
+            value=f"{current_level}레벨 유지",
+            inline=False
+        )
+        embed.color = discord.Color.orange()
+    
+    # 실패 (레벨 하락)
+    else:
+        user_data["sword_level"] = 0
+        user_data["sword_attribute"] = None
+        embed.add_field(
+            name="❌ 강화 실패",
+            value=f"{current_level}레벨 → **0레벨** (속성 초기화)",
+            inline=False
+        )
+        embed.color = discord.Color.red()
+    
+    sword_data[uid] = user_data
+    save_sword_data(sword_data)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 검 판매 명령어
+@bot.tree.command(name="검판매", description="현재 검을 판매합니다")
+async def 검판매(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    
+    if uid not in sword_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    user_data = sword_data[uid]
+    level = user_data.get("sword_level", 0)
+    
+    if level == 0:
+        await interaction.response.send_message("❗ 0레벨 검은 판매할 수 없습니다!")
+        return
+    
+    price = get_sword_price(level)
+    user_data["gold"] = user_data.get("gold", 0) + price
+    user_data["sword_level"] = 0
+    user_data["sword_attribute"] = None
+    
+    sword_data[uid] = user_data
+    save_sword_data(sword_data)
+    
+    embed = discord.Embed(
+        title="💰 검 판매 완료",
+        description=f"{level}레벨 검을 {price:,} 골드에 판매했습니다!",
+        color=discord.Color.gold()
+    )
+    embed.add_field(name="💰 현재 골드", value=f"{user_data['gold']:,} 골드", inline=False)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 결투 명령어
+@bot.tree.command(name="결투", description="다른 유저와 결투합니다")
+@app_commands.describe(상대="결투할 상대를 멘션하세요")
+async def 결투(interaction: discord.Interaction, 상대: discord.Member):
+    attacker_uid = str(interaction.user.id)
+    defender_uid = str(상대.id)
+    server_id = interaction.guild.id
+    
+    if attacker_uid == defender_uid:
+        await interaction.response.send_message("❗ 자신과는 결투할 수 없습니다!")
+        return
+    
+    if attacker_uid not in sword_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    if defender_uid not in sword_data:
+        await interaction.response.send_message(f"❗ {상대.display_name} 님은 게임을 시작하지 않았습니다!")
+        return
+    
+    # 같은 서버인지 확인
+    attacker_data = sword_data[attacker_uid]
+    defender_data = sword_data[defender_uid]
+    
+    if attacker_data.get("server_id") != server_id or defender_data.get("server_id") != server_id:
+        await interaction.response.send_message("❗ 같은 서버의 유저와만 결투할 수 있습니다!")
+        return
+    
+    # 하루 결투 횟수 체크
+    reset_daily_duel_count(defender_uid)
+    defender_data = sword_data[defender_uid]
+    
+    if defender_data.get("duel_count_today", 0) >= 10:
+        await interaction.response.send_message(f"❗ {상대.display_name} 님은 오늘 이미 10번의 결투를 받았습니다!")
+        return
+    attacker_level = attacker_data.get("sword_level", 0)
+    defender_level = defender_data.get("sword_level", 0)
+    
+    if attacker_level == 0:
+        await interaction.response.send_message("❗ 0레벨 검으로는 결투할 수 없습니다!")
+        return
+    
+    if defender_level == 0:
+        await interaction.response.send_message(f"❗ {상대.display_name} 님의 검 레벨이 0입니다!")
+        return
+    
+    # 결투 진행
+    win_rate = calculate_duel_win_rate(attacker_level, defender_level)
+    roll = random.random()
+    
+    embed = discord.Embed(
+        title="⚔️ 결투 결과",
+        color=discord.Color.purple()
+    )
+    
+    if roll < win_rate:
+        # 공격자 승리
+        stolen_gold = calculate_duel_gold(attacker_level, defender_level, defender_data.get("gold", 0))
+        attacker_data["gold"] = attacker_data.get("gold", 0) + stolen_gold
+        defender_data["gold"] = max(0, defender_data.get("gold", 0) - stolen_gold)
+        
+        embed.add_field(
+            name="✅ 승리!",
+            value=f"{interaction.user.display_name} 님이 승리했습니다!",
+            inline=False
+        )
+        embed.add_field(
+            name="💰 획득 골드",
+            value=f"{stolen_gold:,} 골드를 획득했습니다!",
+            inline=False
+        )
+        embed.color = discord.Color.green()
+    else:
+        # 방어자 승리
+        stolen_gold = calculate_duel_gold(defender_level, attacker_level, attacker_data.get("gold", 0))
+        defender_data["gold"] = defender_data.get("gold", 0) + stolen_gold
+        attacker_data["gold"] = max(0, attacker_data.get("gold", 0) - stolen_gold)
+        
+        embed.add_field(
+            name="❌ 패배...",
+            value=f"{상대.display_name} 님이 승리했습니다!",
+            inline=False
+        )
+        embed.add_field(
+            name="💰 손실 골드",
+            value=f"{stolen_gold:,} 골드를 잃었습니다...",
+            inline=False
+        )
+        embed.color = discord.Color.red()
+    
+    # 결투 횟수 증가
+    defender_data["duel_count_today"] = defender_data.get("duel_count_today", 0) + 1
+    defender_data["last_duel_date"] = str(datetime.now(KST).date())
+    
+    sword_data[attacker_uid] = attacker_data
+    sword_data[defender_uid] = defender_data
+    save_sword_data(sword_data)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 검 랭킹 명령어
+@bot.tree.command(name="검랭킹", description="검 레벨 상위 10명을 확인합니다")
+async def 검랭킹(interaction: discord.Interaction):
+    server_id = interaction.guild.id
+    
+    # 같은 서버의 유저만 필터링
+    server_users = {
+        uid: data for uid, data in sword_data.items()
+        if data.get("server_id") == server_id and data.get("sword_level", 0) > 0
+    }
+    
+    if not server_users:
+        await interaction.response.send_message("❗ 랭킹 정보가 없습니다.")
+        return
+    
+    # 레벨 기준 정렬
+    sorted_users = sorted(server_users.items(), key=lambda x: (x[1].get("sword_level", 0), x[1].get("gold", 0)), reverse=True)
+    
+    embed = discord.Embed(title="🏆 검 레벨 랭킹 TOP 10", color=discord.Color.gold())
+    
+    for idx, (uid, data) in enumerate(sorted_users[:10], start=1):
+        try:
+            user = await bot.fetch_user(int(uid))
+            level = data.get("sword_level", 0)
+            attribute = data.get("sword_attribute", "없음")
+            gold = data.get("gold", 0)
+            
+            title = f"{idx}. {user.display_name}"
+            if level == 15:
+                title += " 👑"
+            
+            value = f"레벨 {level} | {attribute} 속성 | {gold:,} 골드"
+            embed.add_field(name=title, value=value, inline=False)
+        except:
+            continue
+    
+    await interaction.response.send_message(embed=embed)
+
+
 # 뉴스 루프
 @tasks.loop(minutes=1)
 async def daily_report():
