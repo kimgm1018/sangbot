@@ -172,6 +172,36 @@ sang_prompt = PromptTemplate(
 
 sangchain = sang_prompt | sang_llm
 
+# ------------------ 결투 스토리 생성 --------------------------------
+
+duel_story_prompt = PromptTemplate(
+    input_variables=["attacker_name", "defender_name", "attacker_level", "defender_level", 
+                     "attacker_attribute", "defender_attribute", "attacker_sword_name", "defender_sword_name",
+                     "winner_name", "stolen_gold"],
+    template="""
+당신은 판타지 세계의 서사시 작가입니다. 두 검사가 결투를 벌인 이야기를 작성해주세요.
+
+결투 정보:
+- 공격자: {attacker_name} (검 레벨: {attacker_level}, 속성: {attacker_attribute}, 검 이름: {attacker_sword_name})
+- 방어자: {defender_name} (검 레벨: {defender_level}, 속성: {defender_attribute}, 검 이름: {defender_sword_name})
+- 승리자: {winner_name}
+- 획득 골드: {stolen_gold} 골드
+
+요구사항:
+1. 판타지 세계관에 맞는 웅장하고 드라마틱한 스토리를 작성하세요.
+2. 두 검사의 검 이름과 속성을 활용하여 전투 장면을 생생하게 묘사하세요.
+3. 레벨 차이에 따라 전투의 난이도와 긴장감을 표현하세요.
+4. 승리자가 어떻게 승리했는지 구체적으로 묘사하세요.
+5. 마지막에 "{winner_name}이(가) 승리했다!"라는 결론을 포함하세요.
+6. 스토리는 3줄에서 4줄 정도로 작성하세요.
+7. 이모지나 특수문자는 사용하지 마세요.
+
+스토리를 작성해주세요:
+""",
+)
+
+duel_story_chain = duel_story_prompt | sang_llm
+
 
 # ------------------------------- chat bot ------------------------------------
 
@@ -227,6 +257,7 @@ async def on_message(message):
         xp_data[uid]["xp"] -= required_xp(xp_data[uid]["level"])
         xp_data[uid]["level"] += 1
 
+        # 맨션 사용 (자동으로 서버 닉네임으로 표시되면서 맨션 기능도 작동)
         await message.channel.send(
             f"🎉 {message.author.mention} 님이 **레벨 {xp_data[uid]['level']}**로 레벨업 했습니다! 🥳"
         )
@@ -277,21 +308,27 @@ async def 랭킹(interaction: discord.Interaction):
 
 # ==================== 검 키우기 게임 ====================
 
-SWORD_FILE = "sword_data.json"
+SWORD_FILE_PREFIX = "sword_data_"  # 서버별 파일: sword_data_{server_id}.json
 SWORD_ATTRIBUTES = ["빛", "어둠", "피", "자연", "마"]
 
-# 검 게임 데이터 로딩/저장 함수
-def load_sword_data():
-    if os.path.exists(SWORD_FILE):
-        with open(SWORD_FILE, "r", encoding="utf-8") as f:
+# 서버별 검 게임 데이터 로딩/저장 함수
+def get_sword_file_path(server_id):
+    """서버 ID에 따른 데이터 파일 경로 반환"""
+    return f"{SWORD_FILE_PREFIX}{server_id}.json"
+
+def load_sword_data(server_id):
+    """특정 서버의 검 게임 데이터 로드"""
+    file_path = get_sword_file_path(server_id)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
             return json.load(f)
     return {}
 
-def save_sword_data(data):
-    with open(SWORD_FILE, "w", encoding="utf-8") as f:
+def save_sword_data(server_id, data):
+    """특정 서버의 검 게임 데이터 저장"""
+    file_path = get_sword_file_path(server_id)
+    with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
-
-sword_data = load_sword_data()
 
 # 강화 확률 함수
 def get_enhancement_rate(current_level):
@@ -322,6 +359,356 @@ def get_maintain_rate(current_level):
         return 10  # 중간 레벨은 10%
     else:
         return 15  # 높은 레벨은 15%
+
+# 강화 멘트 반환 함수
+def get_enhancement_message(current_level, new_level, attribute):
+    """
+    레벨과 속성에 따라 적절한 강화 멘트를 반환
+    """
+    # 속성별 멘트 딕셔너리
+    enhancement_messages = {
+        "빛": {
+            "attribute_grant": [
+                "✨ 신성한 빛이 검에 깃들었다! 빛의 속성이 부여되었다!",
+                "✨ 하늘에서 내려온 빛이 검을 감싸며 빛의 속성을 부여했다!",
+                "✨ 찬란한 빛이 검에 스며들어 빛의 속성이 깨어났다!"
+            ],
+            "basic": [
+                "✨ 빛의 힘이 조금씩 강해지며 검을 강화시켰다!",
+                "✨ 신성한 빛이 검을 감싸며 강화의 기운을 불어넣었다!",
+                "✨ 찬란한 빛이 검에 스며들어 더욱 날카로워졌다!"
+            ],
+            "epic": [
+                "✨✨ 강렬한 빛의 폭풍이 검을 감싸며 강화되었다!",
+                "✨✨ 신성한 빛이 하늘을 찌를 듯 강해지며 검을 강화시켰다!",
+                "✨✨ 찬란한 빛의 기운이 검에 깃들어 압도적인 힘을 발휘한다!"
+            ],
+            "legendary": [
+                "✨✨✨ 신중하게... 빛의 본질이 검에 깃들어 전설에 한 걸음 다가갔다.",
+                "✨✨✨ 조심스럽게 강화되는 빛의 힘, 검은 이제 전설의 영역에 접근하고 있다.",
+                "✨✨✨ 진지한 강화의 순간, 신성한 빛이 검의 운명을 바꾸고 있다."
+            ],
+            "king": [
+                "👑✨✨✨ 빛의 속성을 가진 왕의 검이 탄생했다!! 신성한 빛이 하늘을 찌르며 새로운 왕이 등극한다!",
+                "👑✨✨✨ 빛의 왕이 탄생했다!! 찬란한 빛의 검을 가진 자가 이제 이 땅의 왕이 되었다!",
+                "👑✨✨✨ 빛의 속성 검을 가진 왕이 탄생했다!! 신성한 빛이 모든 것을 지배한다!"
+            ]
+        },
+        "어둠": {
+            "attribute_grant": [
+                "🌑 깊은 어둠이 검에 깃들었다! 어둠의 속성이 부여되었다!",
+                "🌑 그림자의 힘이 검을 감싸며 어둠의 속성을 부여했다!",
+                "🌑 암흑의 기운이 검에 스며들어 어둠의 속성이 깨어났다!"
+            ],
+            "basic": [
+                "🌑 어둠의 힘이 조금씩 강해지며 검을 강화시켰다!",
+                "🌑 그림자의 기운이 검을 감싸며 강화의 힘을 불어넣었다!",
+                "🌑 암흑의 마력이 검에 스며들어 더욱 날카로워졌다!"
+            ],
+            "epic": [
+                "🌑🌑 깊은 어둠의 폭풍이 검을 감싸며 강화되었다!",
+                "🌑🌑 그림자의 힘이 공간을 가르며 검을 강화시켰다!",
+                "🌑🌑 암흑의 기운이 검에 깃들어 압도적인 힘을 발휘한다!"
+            ],
+            "legendary": [
+                "🌑🌑🌑 신중하게... 어둠의 본질이 검에 깃들어 전설에 한 걸음 다가갔다.",
+                "🌑🌑🌑 조심스럽게 강화되는 그림자의 힘, 검은 이제 전설의 영역에 접근하고 있다.",
+                "🌑🌑🌑 진지한 강화의 순간, 암흑의 기운이 검의 운명을 바꾸고 있다."
+            ],
+            "king": [
+                "👑🌑🌑🌑 어둠의 속성을 가진 왕의 검이 탄생했다!! 깊은 그림자가 세상을 뒤덮으며 새로운 왕이 등극한다!",
+                "👑🌑🌑🌑 어둠의 왕이 탄생했다!! 암흑의 검을 가진 자가 이제 이 땅의 왕이 되었다!",
+                "👑🌑🌑🌑 어둠의 속성 검을 가진 왕이 탄생했다!! 그림자의 힘이 모든 것을 지배한다!"
+            ]
+        },
+        "피": {
+            "attribute_grant": [
+                "🩸 생명의 피가 검에 깃들었다! 피의 속성이 부여되었다!",
+                "🩸 붉은 피가 검을 감싸며 피의 속성을 부여했다!",
+                "🩸 생명의 힘이 검에 스며들어 피의 속성이 깨어났다!"
+            ],
+            "basic": [
+                "🩸 피의 힘이 조금씩 강해지며 검을 강화시켰다!",
+                "🩸 생명의 기운이 검을 감싸며 강화의 힘을 불어넣었다!",
+                "🩸 붉은 피가 검에 스며들어 더욱 날카로워졌다!"
+            ],
+            "epic": [
+                "🩸🩸 생명의 피가 폭풍처럼 검을 감싸며 강화되었다!",
+                "🩸🩸 붉은 피의 힘이 검을 감싸며 강화시켰다!",
+                "🩸🩸 생명의 기운이 검에 깃들어 압도적인 힘을 발휘한다!"
+            ],
+            "legendary": [
+                "🩸🩸🩸 신중하게... 생명의 본질이 검에 깃들어 전설에 한 걸음 다가갔다.",
+                "🩸🩸🩸 조심스럽게 강화되는 피의 힘, 검은 이제 전설의 영역에 접근하고 있다.",
+                "🩸🩸🩸 진지한 강화의 순간, 생명의 기운이 검의 운명을 바꾸고 있다."
+            ],
+            "king": [
+                "👑🩸🩸🩸 피의 속성을 가진 왕의 검이 탄생했다!! 생명의 피가 강물처럼 흐르며 새로운 왕이 등극한다!",
+                "👑🩸🩸🩸 피의 왕이 탄생했다!! 붉은 피의 검을 가진 자가 이제 이 땅의 왕이 되었다!",
+                "👑🩸🩸🩸 피의 속성 검을 가진 왕이 탄생했다!! 생명의 힘이 모든 것을 지배한다!"
+            ]
+        },
+        "자연": {
+            "attribute_grant": [
+                "🌿 자연의 힘이 검에 깃들었다! 자연의 속성이 부여되었다!",
+                "🌿 대지의 기운이 검을 감싸며 자연의 속성을 부여했다!",
+                "🌿 생명의 숨결이 검에 스며들어 자연의 속성이 깨어났다!"
+            ],
+            "basic": [
+                "🌿 자연의 힘이 조금씩 강해지며 검을 강화시켰다!",
+                "🌿 대지의 기운이 검을 감싸며 강화의 힘을 불어넣었다!",
+                "🌿 생명의 숨결이 검에 스며들어 더욱 날카로워졌다!"
+            ],
+            "epic": [
+                "🌿🌿 대지의 폭풍이 검을 감싸며 강화되었다!",
+                "🌿🌿 자연의 힘이 대지를 뒤흔들며 검을 강화시켰다!",
+                "🌿🌿 생명의 숨결이 검에 깃들어 압도적인 힘을 발휘한다!"
+            ],
+            "legendary": [
+                "🌿🌿🌿 신중하게... 자연의 본질이 검에 깃들어 전설에 한 걸음 다가갔다.",
+                "🌿🌿🌿 조심스럽게 강화되는 대지의 힘, 검은 이제 전설의 영역에 접근하고 있다.",
+                "🌿🌿🌿 진지한 강화의 순간, 생명의 숨결이 검의 운명을 바꾸고 있다."
+            ],
+            "king": [
+                "👑🌿🌿🌿 자연의 속성을 가진 왕의 검이 탄생했다!! 대지의 힘이 세상을 뒤흔들며 새로운 왕이 등극한다!",
+                "👑🌿🌿🌿 자연의 왕이 탄생했다!! 생명의 숨결이 담긴 검을 가진 자가 이제 이 땅의 왕이 되었다!",
+                "👑🌿🌿🌿 자연의 속성 검을 가진 왕이 탄생했다!! 대지의 기운이 모든 것을 지배한다!"
+            ]
+        },
+        "마": {
+            "attribute_grant": [
+                "🔮 신비로운 마법이 검에 깃들었다! 마의 속성이 부여되었다!",
+                "🔮 마법의 빛이 검을 감싸며 마의 속성을 부여했다!",
+                "🔮 마력의 기운이 검에 스며들어 마의 속성이 깨어났다!"
+            ],
+            "basic": [
+                "🔮 마법의 힘이 조금씩 강해지며 검을 강화시켰다!",
+                "🔮 신비로운 기운이 검을 감싸며 강화의 힘을 불어넣었다!",
+                "🔮 마력의 빛이 검에 스며들어 더욱 날카로워졌다!"
+            ],
+            "epic": [
+                "🔮🔮 마법의 폭풍이 검을 감싸며 강화되었다!",
+                "🔮🔮 신비로운 마력이 공간을 뒤틀며 검을 강화시켰다!",
+                "🔮🔮 마력의 빛이 검에 깃들어 압도적인 힘을 발휘한다!"
+            ],
+            "legendary": [
+                "🔮🔮🔮 신중하게... 마법의 본질이 검에 깃들어 전설에 한 걸음 다가갔다.",
+                "🔮🔮🔮 조심스럽게 강화되는 마력의 힘, 검은 이제 전설의 영역에 접근하고 있다.",
+                "🔮🔮🔮 진지한 강화의 순간, 신비로운 기운이 검의 운명을 바꾸고 있다."
+            ],
+            "king": [
+                "👑🔮🔮🔮 마법의 왕의 검이 탄생했다!! 신비로운 마력이 공간을 뒤틀며 새로운 왕이 등극한다!",
+                "👑🔮🔮🔮 마법의 왕이 탄생했다!! 마력의 빛이 담긴 검을 가진 자가 이제 이 땅의 왕이 되었다!",
+                "👑🔮🔮🔮 마법의 검을 가진 왕이 탄생했다!! 신비로운 힘이 모든 것을 지배한다!"
+            ]
+        }
+    }
+    
+    # 속성이 없으면 기본 멘트 반환
+    if not attribute or attribute not in enhancement_messages:
+        return f"검의 힘이 강해졌다! ({current_level}레벨 → {new_level}레벨)"
+    
+    # 레벨 구간에 따라 적절한 멘트 선택
+    if current_level == 0 and new_level == 1:
+        # 속성 부여
+        messages = enhancement_messages[attribute]["attribute_grant"]
+    elif new_level == 15:
+        # 왕의 검 탄생
+        messages = enhancement_messages[attribute]["king"]
+    elif new_level >= 11:
+        # 전설 구간 (11-14레벨)
+        messages = enhancement_messages[attribute]["legendary"]
+    elif new_level >= 5:
+        # 멋진 구간 (5-10레벨)
+        messages = enhancement_messages[attribute]["epic"]
+    else:
+        # 기본 구간 (1-4레벨)
+        messages = enhancement_messages[attribute]["basic"]
+    
+    # 랜덤으로 하나 선택
+    return random.choice(messages)
+
+# 검 이름 생성 함수 (레벨별, 속성별)
+def get_sword_name(level, attribute=None):
+    """
+    레벨과 속성에 따라 적절한 검 이름을 랜덤으로 반환
+    """
+    if level == 0:
+        return "낡은 검"
+    
+    if not attribute or attribute not in SWORD_ATTRIBUTES:
+        return f"{level}레벨 검"
+    
+    # 속성별 검 이름 풀
+    sword_names = {
+        "빛": {
+            1: ["빛나는 낡은 검", "반짝이는 낡은 검"],
+            2: ["반짝이는 검", "빛의 작은 검"],
+            3: ["빛의 단검", "신성한 빛의 단검"],
+            4: ["신성한 빛의 검", "찬란한 빛의 검"],
+            5: ["빛의 장검", "신성한 빛의 장검"],
+            6: ["신성한 빛의 장검", "찬란한 빛의 장검"],
+            7: ["찬란한 빛의 검", "하늘의 빛 검"],
+            8: ["하늘의 빛 검", "성스러운 빛의 검"],
+            9: ["성스러운 빛의 검", "신의 빛 검"],
+            10: ["신의 빛 검", "영원한 빛의 검"],
+            11: ["전설의 빛의 검", "신성한 빛의 전설 검"],
+            12: ["신성한 빛의 전설 검", "하늘을 찌르는 빛의 검"],
+            13: ["하늘을 찌르는 빛의 검", "신의 빛 전설 검"],
+            14: ["신의 빛 전설 검", "영원한 빛의 전설 검"],
+            15: ["빛의 절대왕의 검", "신성한 빛의 절대왕의 검", "하늘을 지배하는 빛의 왕의 검", "영원한 빛의 절대왕의 검", "신의 권능을 가진 빛의 왕의 검"]
+        },
+        "어둠": {
+            1: ["어둠에 물든 검", "그림자에 물든 검"],
+            2: ["그림자 검", "어둠의 작은 검"],
+            3: ["암흑의 단검", "그림자의 단검"],
+            4: ["깊은 어둠의 검", "암흑의 검"],
+            5: ["어둠의 장검", "그림자의 장검"],
+            6: ["그림자의 장검", "암흑의 장검"],
+            7: ["암흑의 장검", "심연의 검"],
+            8: ["심연의 검", "절대 어둠의 검"],
+            9: ["절대 어둠의 검", "그림자 군주의 검"],
+            10: ["그림자 군주의 검", "영원한 어둠의 검"],
+            11: ["전설의 어둠의 검", "심연의 그림자 전설 검"],
+            12: ["심연의 그림자 전설 검", "절대 암흑의 검"],
+            13: ["절대 암흑의 검", "그림자 군주의 전설 검"],
+            14: ["그림자 군주의 전설 검", "영원한 어둠의 전설 검"],
+            15: ["어둠의 절대왕의 검", "심연을 지배하는 그림자 왕의 검", "절대 암흑의 절대왕의 검", "영원한 어둠의 왕의 검", "그림자 군주의 절대왕의 검"]
+        },
+        "피": {
+            1: ["피로 물든 검", "붉은 피의 검"],
+            2: ["붉은 검", "피의 작은 검"],
+            3: ["생명의 단검", "피의 단검"],
+            4: ["피의 갈증 검", "생명의 피 검"],
+            5: ["피의 장검", "생명의 장검"],
+            6: ["생명의 장검", "붉은 피의 검"],
+            7: ["붉은 피의 검", "피의 갈증 장검"],
+            8: ["피의 갈증 장검", "생명 흡수 검"],
+            9: ["생명 흡수 검", "피의 군주 검"],
+            10: ["피의 군주 검", "불멸의 피 검"],
+            11: ["전설의 피의 검", "생명 흡수 전설 검"],
+            12: ["생명 흡수 전설 검", "불멸의 피의 검"],
+            13: ["불멸의 피의 검", "피의 군주 전설 검"],
+            14: ["피의 군주 전설 검", "영원한 생명의 전설 검"],
+            15: ["피의 절대왕의 검", "생명을 지배하는 피의 왕의 검", "불멸의 피 절대왕의 검", "영원한 생명의 왕의 검", "피의 군주 절대왕의 검"]
+        },
+        "자연": {
+            1: ["자연의 낡은 검", "대지의 낡은 검"],
+            2: ["대지의 검", "자연의 작은 검"],
+            3: ["생명의 단검", "숲의 단검"],
+            4: ["숲의 검", "대지의 힘 검"],
+            5: ["자연의 장검", "대지의 장검"],
+            6: ["대지의 장검", "숲의 장검"],
+            7: ["숲의 장검", "생명의 숨결 검"],
+            8: ["생명의 숨결 검", "대지의 힘 검"],
+            9: ["대지의 힘 검", "자연의 군주 검"],
+            10: ["자연의 군주 검", "영원한 대지의 검"],
+            11: ["전설의 자연의 검", "대지의 힘 전설 검"],
+            12: ["대지의 힘 전설 검", "생명의 숨결 전설 검"],
+            13: ["생명의 숨결 전설 검", "자연의 군주 전설 검"],
+            14: ["자연의 군주 전설 검", "영원한 대지의 전설 검"],
+            15: ["자연의 절대왕의 검", "대지를 지배하는 자연의 왕의 검", "생명의 숨결 절대왕의 검", "영원한 대지의 왕의 검", "자연의 군주 절대왕의 검"]
+        },
+        "마": {
+            1: ["마법에 물든 검", "마력에 물든 검"],
+            2: ["마력의 검", "마법의 작은 검"],
+            3: ["신비의 단검", "마법의 단검"],
+            4: ["마법의 빛 검", "신비로운 마력 검"],
+            5: ["마법의 장검", "마력의 장검"],
+            6: ["마력의 장검", "신비의 장검"],
+            7: ["신비의 장검", "마법의 빛 장검"],
+            8: ["마법의 빛 장검", "고대 마법 검"],
+            9: ["고대 마법 검", "마법 군주의 검"],
+            10: ["마법 군주의 검", "영원한 마력의 검"],
+            11: ["전설의 마법의 검", "고대 마법 전설 검"],
+            12: ["고대 마법 전설 검", "신비로운 마력의 검"],
+            13: ["신비로운 마력의 검", "마법 군주의 전설 검"],
+            14: ["마법 군주의 전설 검", "영원한 마력의 전설 검"],
+            15: ["마법의 절대왕의 검", "마력을 지배하는 마법의 왕의 검", "고대 마법 절대왕의 검", "영원한 마력의 왕의 검", "마법 군주의 절대왕의 검"]
+        }
+    }
+    
+    if level in sword_names[attribute]:
+        return random.choice(sword_names[attribute][level])
+    else:
+        return f"{attribute} 속성 {level}레벨 검"
+
+# 검 이미지 URL 반환 (레벨별)
+def get_sword_image_url(level, attribute=None):
+    """
+    레벨과 속성에 따른 검 이미지 URL 반환
+    이미지 URL을 설정하려면 아래 SWORD_IMAGES 딕셔너리를 수정하세요.
+    
+    이미지 호스팅 방법:
+    - Discord CDN (이미지 업로드 후 링크 복사)
+    - Imgur, imgbb 등 이미지 호스팅 서비스
+    - GitHub, GitLab 등 코드 저장소의 이미지
+    """
+    # ========== 여기에 이미지 URL을 설정하세요 ==========
+    # 레벨별 이미지 URL (None이면 이미지 표시 안 함)
+    SWORD_IMAGES = {
+        0: None,   # 예: "https://example.com/sword_level_0.png"
+        1: None,   # 예: "https://example.com/sword_level_1.png"
+        2: None,
+        3: None,
+        4: None,
+        5: None,
+        6: None,
+        7: None,
+        8: None,
+        9: None,
+        10: None,
+        11: None,
+        12: None,
+        13: None,
+        14: None,
+        15: None,  # 예: "https://example.com/sword_level_15_king.png"
+    }
+    
+    # 또는 자동 생성 방식 (base_url 설정 시)
+    base_url = None  # 예: "https://your-image-host.com/swords/"
+    
+    # ====================================================
+    
+    # base_url이 설정되어 있으면 자동 생성
+    if base_url:
+        if level == 15:
+            return f"{base_url}sword_level_15_king.png"
+        elif attribute and attribute in SWORD_ATTRIBUTES:
+            return f"{base_url}sword_level_{level}_{attribute.lower()}.png"
+        else:
+            return f"{base_url}sword_level_{level}.png"
+    
+    # 딕셔너리에서 직접 가져오기
+    return SWORD_IMAGES.get(level, None)
+
+# 강화 실패 이미지 URL 반환
+def get_enhancement_fail_image_url(fail_type="maintain"):
+    """
+    강화 실패 시 표시할 이미지 URL 반환
+    fail_type: "maintain" (레벨 유지) 또는 "downgrade" (레벨 하락)
+    """
+    # ========== 여기에 실패 이미지 URL을 설정하세요 ==========
+    # 강화 실패 이미지 URL (None이면 이미지 표시 안 함)
+    FAIL_IMAGES = {
+        "maintain": :"https://ibb.co/j9bsz9pJ",      # 레벨 유지 실패 이미지
+        "downgrade": "https://ibb.co/d4PDHMFC",     # 레벨 하락 실패 이미지
+    }
+    
+    # 또는 자동 생성 방식 (base_url 설정 시)
+    base_url = None  # 예: "https://your-image-host.com/swords/fail/"
+    
+    # ====================================================
+    
+    # base_url이 설정되어 있으면 자동 생성
+    if base_url:
+        if fail_type == "maintain":
+            return f"{base_url}enhancement_fail_maintain.png"
+        else:  # downgrade
+            return f"{base_url}enhancement_fail_downgrade.png"
+    
+    # 딕셔너리에서 직접 가져오기
+    return FAIL_IMAGES.get(fail_type, None)
 
 # 강화 비용 계산
 def get_enhancement_cost(current_level):
@@ -383,22 +770,26 @@ def calculate_duel_gold(winner_level, loser_level, loser_gold):
 
 # 서버의 왕(15레벨) 찾기
 def find_king(server_id):
-    for uid, data in sword_data.items():
-        if data.get("server_id") == server_id and data.get("sword_level", 0) == 15:
+    """특정 서버의 왕(15레벨) 찾기"""
+    server_data = load_sword_data(server_id)
+    for uid, data in server_data.items():
+        if data.get("sword_level", 0) == 15:
             return uid
     return None
 
 # 하루 결투 횟수 초기화 (자정 체크)
-def reset_daily_duel_count(uid):
+def reset_daily_duel_count(server_id, uid):
+    """특정 서버의 유저 결투 횟수 초기화"""
     today = datetime.now(KST).date()
-    user_data = sword_data.get(uid, {})
+    server_data = load_sword_data(server_id)
+    user_data = server_data.get(uid, {})
     last_duel_date = user_data.get("last_duel_date")
     
     if last_duel_date != str(today):
         user_data["duel_count_today"] = 0
         user_data["last_duel_date"] = str(today)
-        sword_data[uid] = user_data
-        save_sword_data(sword_data)
+        server_data[uid] = user_data
+        save_sword_data(server_id, server_data)
 
 # 검 시작 명령어
 @bot.tree.command(name="검시작", description="검 키우기 게임을 시작합니다")
@@ -406,19 +797,20 @@ async def 검시작(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     server_id = interaction.guild.id
     
-    if uid in sword_data:
+    server_data = load_sword_data(server_id)
+    
+    if uid in server_data:
         await interaction.response.send_message("❗ 이미 게임을 시작하셨습니다! `/검정보` 명령어로 현재 상태를 확인하세요.")
         return
     
-    sword_data[uid] = {
+    server_data[uid] = {
         "gold": 100000,
         "sword_level": 0,
         "sword_attribute": None,
-        "server_id": server_id,
         "duel_count_today": 0,
         "last_duel_date": str(datetime.now(KST).date())
     }
-    save_sword_data(sword_data)
+    save_sword_data(server_id, server_data)
     
     embed = discord.Embed(
         title="⚔️ 검 키우기 게임 시작!",
@@ -435,23 +827,35 @@ async def 검시작(interaction: discord.Interaction):
 @bot.tree.command(name="검정보", description="내 검 정보를 확인합니다")
 async def 검정보(interaction: discord.Interaction):
     uid = str(interaction.user.id)
+    server_id = interaction.guild.id
     
-    if uid not in sword_data:
+    server_data = load_sword_data(server_id)
+    
+    if uid not in server_data:
         await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
         return
     
-    user_data = sword_data[uid]
+    user_data = server_data[uid]
     level = user_data.get("sword_level", 0)
     attribute = user_data.get("sword_attribute", "없음")
     gold = user_data.get("gold", 0)
+    
+    # 검 이름 생성
+    sword_name = get_sword_name(level, attribute if attribute != "없음" else None)
     
     embed = discord.Embed(
         title=f"⚔️ {interaction.user.display_name} 님의 검 정보",
         color=discord.Color.blue()
     )
+    embed.add_field(name="⚔️ 검 이름", value=sword_name, inline=False)
     embed.add_field(name="💰 골드", value=f"{gold:,} 골드", inline=True)
     embed.add_field(name="⚔️ 검 레벨", value=f"{level} 레벨", inline=True)
     embed.add_field(name="✨ 속성", value=attribute if attribute != "없음" else "속성 없음", inline=True)
+    
+    # 현재 검 이미지 표시 (이미지 URL이 설정되어 있을 때만)
+    sword_image = get_sword_image_url(level, attribute if attribute != "없음" else None)
+    if sword_image:
+        embed.set_image(url=sword_image)
     
     if level == 15:
         embed.add_field(name="👑 칭호", value="왕의 검", inline=False)
@@ -469,13 +873,13 @@ async def 강화(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     server_id = interaction.guild.id
     
-    if uid not in sword_data:
+    server_data = load_sword_data(server_id)
+    
+    if uid not in server_data:
         await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
         return
     
-    user_data = sword_data[uid]
-    # 서버 ID 업데이트 (기존 데이터 호환성)
-    user_data["server_id"] = server_id
+    user_data = server_data[uid]
     current_level = user_data.get("sword_level", 0)
     
     if current_level >= 15:
@@ -505,18 +909,33 @@ async def 강화(interaction: discord.Interaction):
         new_level = current_level + 1
         user_data["sword_level"] = new_level
         
+        # 강화 성공 시 새로운 레벨의 이미지 표시
+        new_attribute = user_data.get("sword_attribute")
+        sword_image = get_sword_image_url(new_level, new_attribute)
+        if sword_image:
+            embed.set_image(url=sword_image)
+        
         # 0->1 강화 시 속성 부여
         if current_level == 0 and new_level == 1:
             attribute = random.choice(SWORD_ATTRIBUTES)
             user_data["sword_attribute"] = attribute
-            embed.add_field(name="✨ 속성 부여!", value=f"**{attribute}** 속성이 부여되었습니다!", inline=False)
+            new_attribute = attribute  # 멘트를 위해 업데이트
+        
+        # 강화 멘트 추가
+        enhancement_message = get_enhancement_message(current_level, new_level, new_attribute)
+        embed.add_field(
+            name="⚔️ 강화 성공!",
+            value=enhancement_message,
+            inline=False
+        )
         
         # 15레벨 달성 시 왕의 검 체크
         if new_level == 15:
             king_uid = find_king(server_id)
             if king_uid and king_uid != uid:
                 # 기존 왕과 자동 결투
-                king_data = sword_data[king_uid]
+                king_data = server_data[king_uid]
+                # 맨션 사용 (자동으로 서버 닉네임으로 표시되면서 맨션 기능도 작동)
                 embed.add_field(
                     name="⚔️ 왕의 검 결투 발생!",
                     value=f"기존 왕 <@{king_uid}>과 자동으로 결투가 시작됩니다!",
@@ -554,7 +973,7 @@ async def 강화(interaction: discord.Interaction):
                         inline=False
                     )
                 
-                sword_data[king_uid] = king_data
+                server_data[king_uid] = king_data
             else:
                 embed.add_field(
                     name="👑 왕의 검 획득!",
@@ -562,35 +981,89 @@ async def 강화(interaction: discord.Interaction):
                     inline=False
                 )
         
+        # 결투 후 최종 레벨과 속성 확인 (결투에서 패배하면 레벨이 변경될 수 있음)
+        final_level = user_data.get("sword_level", new_level)
+        final_attribute = user_data.get("sword_attribute", new_attribute)
+        
+        # 검 이름 생성 (최종 레벨)
+        new_sword_name = get_sword_name(final_level, final_attribute)
+        
+        # 레벨 정보 추가 (멘트와 함께)
+        if final_level != new_level:
+            # 결투에서 패배해서 레벨이 변경된 경우
+            embed.add_field(
+                name="📊 레벨 변화",
+                value=f"{current_level}레벨 → **{new_level}레벨** → **{final_level}레벨** (결투 패배)",
+                inline=False
+            )
+        else:
+            embed.add_field(
+                name="📊 레벨 변화",
+                value=f"{current_level}레벨 → **{final_level}레벨**",
+                inline=False
+            )
         embed.add_field(
-            name="✅ 강화 성공!",
-            value=f"{current_level}레벨 → **{new_level}레벨**",
+            name="⚔️ 검 이름",
+            value=new_sword_name,
             inline=False
         )
         embed.color = discord.Color.green()
     
     # 실패 (유지 가능)
     elif roll <= success_rate + maintain_rate:
+        current_attribute = user_data.get("sword_attribute")
+        current_sword_name = get_sword_name(current_level, current_attribute)
+        
         embed.add_field(
             name="⚠️ 강화 실패 (레벨 유지)",
             value=f"{current_level}레벨 유지",
             inline=False
         )
+        embed.add_field(
+            name="⚔️ 검 이름",
+            value=current_sword_name,
+            inline=False
+        )
         embed.color = discord.Color.orange()
+        # 강화 실패 (레벨 유지) 이미지 표시
+        fail_image = get_enhancement_fail_image_url("maintain")
+        if fail_image:
+            embed.set_image(url=fail_image)
+        else:
+            # 실패 이미지가 없으면 현재 레벨 이미지 유지
+            sword_image = get_sword_image_url(current_level, current_attribute)
+            if sword_image:
+                embed.set_image(url=sword_image)
     
     # 실패 (레벨 하락)
     else:
         user_data["sword_level"] = 0
         user_data["sword_attribute"] = None
+        failed_sword_name = get_sword_name(0, None)
+        
         embed.add_field(
             name="❌ 강화 실패",
             value=f"{current_level}레벨 → **0레벨** (속성 초기화)",
             inline=False
         )
+        embed.add_field(
+            name="⚔️ 검 이름",
+            value=failed_sword_name,
+            inline=False
+        )
         embed.color = discord.Color.red()
+        # 강화 실패 (레벨 하락) 이미지 표시
+        fail_image = get_enhancement_fail_image_url("downgrade")
+        if fail_image:
+            embed.set_image(url=fail_image)
+        else:
+            # 실패 이미지가 없으면 0레벨 이미지
+            sword_image = get_sword_image_url(0)
+            if sword_image:
+                embed.set_image(url=sword_image)
     
-    sword_data[uid] = user_data
-    save_sword_data(sword_data)
+    server_data[uid] = user_data
+    save_sword_data(server_id, server_data)
     
     await interaction.response.send_message(embed=embed)
 
@@ -598,12 +1071,15 @@ async def 강화(interaction: discord.Interaction):
 @bot.tree.command(name="검판매", description="현재 검을 판매합니다")
 async def 검판매(interaction: discord.Interaction):
     uid = str(interaction.user.id)
+    server_id = interaction.guild.id
     
-    if uid not in sword_data:
+    server_data = load_sword_data(server_id)
+    
+    if uid not in server_data:
         await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
         return
     
-    user_data = sword_data[uid]
+    user_data = server_data[uid]
     level = user_data.get("sword_level", 0)
     
     if level == 0:
@@ -615,8 +1091,8 @@ async def 검판매(interaction: discord.Interaction):
     user_data["sword_level"] = 0
     user_data["sword_attribute"] = None
     
-    sword_data[uid] = user_data
-    save_sword_data(sword_data)
+    server_data[uid] = user_data
+    save_sword_data(server_id, server_data)
     
     embed = discord.Embed(
         title="💰 검 판매 완료",
@@ -639,25 +1115,23 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
         await interaction.response.send_message("❗ 자신과는 결투할 수 없습니다!")
         return
     
-    if attacker_uid not in sword_data:
+    server_data = load_sword_data(server_id)
+    
+    if attacker_uid not in server_data:
         await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
         return
     
-    if defender_uid not in sword_data:
+    if defender_uid not in server_data:
         await interaction.response.send_message(f"❗ {상대.display_name} 님은 게임을 시작하지 않았습니다!")
         return
     
-    # 같은 서버인지 확인
-    attacker_data = sword_data[attacker_uid]
-    defender_data = sword_data[defender_uid]
-    
-    if attacker_data.get("server_id") != server_id or defender_data.get("server_id") != server_id:
-        await interaction.response.send_message("❗ 같은 서버의 유저와만 결투할 수 있습니다!")
-        return
+    # 같은 서버 데이터 사용 (이미 서버별로 분리됨)
+    attacker_data = server_data[attacker_uid]
+    defender_data = server_data[defender_uid]
     
     # 하루 결투 횟수 체크
-    reset_daily_duel_count(defender_uid)
-    defender_data = sword_data[defender_uid]
+    reset_daily_duel_count(server_id, defender_uid)
+    defender_data = server_data[defender_uid]
     
     if defender_data.get("duel_count_today", 0) >= 10:
         await interaction.response.send_message(f"❗ {상대.display_name} 님은 오늘 이미 10번의 결투를 받았습니다!")
@@ -677,20 +1151,34 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
     win_rate = calculate_duel_win_rate(attacker_level, defender_level)
     roll = random.random()
     
+    # 검 이름 가져오기
+    attacker_attribute = attacker_data.get("sword_attribute", "없음")
+    defender_attribute = defender_data.get("sword_attribute", "없음")
+    attacker_sword_name = get_sword_name(attacker_level, attacker_attribute if attacker_attribute != "없음" else None)
+    defender_sword_name = get_sword_name(defender_level, defender_attribute if defender_attribute != "없음" else None)
+    
+    attacker_name = interaction.user.display_name
+    defender_name = 상대.display_name
+    
     embed = discord.Embed(
         title="⚔️ 결투 결과",
         color=discord.Color.purple()
     )
+    
+    # 스토리 생성을 위한 정보 준비
+    winner_name = ""
+    stolen_gold = 0
     
     if roll < win_rate:
         # 공격자 승리
         stolen_gold = calculate_duel_gold(attacker_level, defender_level, defender_data.get("gold", 0))
         attacker_data["gold"] = attacker_data.get("gold", 0) + stolen_gold
         defender_data["gold"] = max(0, defender_data.get("gold", 0) - stolen_gold)
+        winner_name = attacker_name
         
         embed.add_field(
             name="✅ 승리!",
-            value=f"{interaction.user.display_name} 님이 승리했습니다!",
+            value=f"{attacker_name} 님이 승리했습니다!",
             inline=False
         )
         embed.add_field(
@@ -704,10 +1192,11 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
         stolen_gold = calculate_duel_gold(defender_level, attacker_level, attacker_data.get("gold", 0))
         defender_data["gold"] = defender_data.get("gold", 0) + stolen_gold
         attacker_data["gold"] = max(0, attacker_data.get("gold", 0) - stolen_gold)
+        winner_name = defender_name
         
         embed.add_field(
             name="❌ 패배...",
-            value=f"{상대.display_name} 님이 승리했습니다!",
+            value=f"{defender_name} 님이 승리했습니다!",
             inline=False
         )
         embed.add_field(
@@ -721,21 +1210,60 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
     defender_data["duel_count_today"] = defender_data.get("duel_count_today", 0) + 1
     defender_data["last_duel_date"] = str(datetime.now(KST).date())
     
-    sword_data[attacker_uid] = attacker_data
-    sword_data[defender_uid] = defender_data
-    save_sword_data(sword_data)
+    server_data[attacker_uid] = attacker_data
+    server_data[defender_uid] = defender_data
+    save_sword_data(server_id, server_data)
     
-    await interaction.response.send_message(embed=embed)
+    # 스토리 생성 (비동기)
+    await interaction.response.defer()  # 응답 지연
+    
+    try:
+        story_result = duel_story_chain.invoke({
+            "attacker_name": attacker_name,
+            "defender_name": defender_name,
+            "attacker_level": attacker_level,
+            "defender_level": defender_level,
+            "attacker_attribute": attacker_attribute if attacker_attribute != "없음" else "속성 없음",
+            "defender_attribute": defender_attribute if defender_attribute != "없음" else "속성 없음",
+            "attacker_sword_name": attacker_sword_name,
+            "defender_sword_name": defender_sword_name,
+            "winner_name": winner_name,
+            "stolen_gold": f"{stolen_gold:,}"
+        })
+        
+        story_text = story_result.content if hasattr(story_result, 'content') else str(story_result)
+        
+        # 스토리가 너무 길면 자르기 (Discord embed 필드 제한: 1024자)
+        if len(story_text) > 1024:
+            story_text = story_text[:1021] + "..."
+        
+        embed.add_field(
+            name="📖 결투 스토리",
+            value=story_text,
+            inline=False
+        )
+    except Exception as e:
+        print(f"스토리 생성 오류: {e}")
+        embed.add_field(
+            name="📖 결투 스토리",
+            value="스토리 생성 중 오류가 발생했습니다.",
+            inline=False
+        )
+    
+    await interaction.followup.send(embed=embed)
 
 # 검 랭킹 명령어
 @bot.tree.command(name="검랭킹", description="검 레벨 상위 10명을 확인합니다")
 async def 검랭킹(interaction: discord.Interaction):
     server_id = interaction.guild.id
     
-    # 같은 서버의 유저만 필터링
+    # 서버별 데이터 로드
+    server_data = load_sword_data(server_id)
+    
+    # 같은 서버의 유저만 필터링 (레벨 0 이상)
     server_users = {
-        uid: data for uid, data in sword_data.items()
-        if data.get("server_id") == server_id and data.get("sword_level", 0) > 0
+        uid: data for uid, data in server_data.items()
+        if data.get("sword_level", 0) > 0
     }
     
     if not server_users:
