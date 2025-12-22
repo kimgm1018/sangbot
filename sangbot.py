@@ -356,9 +356,9 @@ def get_maintain_rate(current_level):
     if current_level <= 5:
         return 0  # 낮은 레벨은 유지 없음
     elif current_level <= 10:
-        return 10  # 중간 레벨은 10%
+        return 40  # 중간 레벨은 10%
     else:
-        return 15  # 높은 레벨은 15%
+        return 10  # 높은 레벨은 15%
 
 # 강화 멘트 반환 함수
 def get_enhancement_message(current_level, new_level, attribute):
