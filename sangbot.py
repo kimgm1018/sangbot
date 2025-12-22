@@ -1106,17 +1106,35 @@ async def 검판매(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed)
 
+# 허수아비(가상의 상대) 생성 함수
+def create_dummy_opponent(attacker_level):
+    """
+    공격자 레벨에 맞춰 랜덤한 허수아비 생성
+    """
+    # 허수아비 레벨: 공격자 레벨 ±3 범위 내에서 랜덤 (최소 1, 최대 15)
+    min_level = max(1, attacker_level - 3)
+    max_level = min(15, attacker_level + 3)
+    dummy_level = random.randint(min_level, max_level)
+    
+    # 랜덤 속성
+    dummy_attribute = random.choice(SWORD_ATTRIBUTES)
+    
+    # 허수아비 골드: 레벨에 비례하여 생성 (승리 시 획득 가능)
+    dummy_gold = dummy_level * 5000  # 레벨당 5000골드
+    
+    return {
+        "sword_level": dummy_level,
+        "sword_attribute": dummy_attribute,
+        "gold": dummy_gold,
+        "name": "허수아비"
+    }
+
 # 결투 명령어
 @bot.tree.command(name="결투", description="다른 유저와 결투합니다")
-@app_commands.describe(상대="결투할 상대를 멘션하세요")
-async def 결투(interaction: discord.Interaction, 상대: discord.Member):
+@app_commands.describe(상대="결투할 상대를 멘션하세요 (또는 '허수아비' 입력)")
+async def 결투(interaction: discord.Interaction, 상대: str):
     attacker_uid = str(interaction.user.id)
-    defender_uid = str(상대.id)
     server_id = interaction.guild.id
-    
-    if attacker_uid == defender_uid:
-        await interaction.response.send_message("❗ 자신과는 결투할 수 없습니다!")
-        return
     
     server_data = load_sword_data(server_id)
     
@@ -1124,30 +1142,68 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
         await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
         return
     
-    if defender_uid not in server_data:
-        await interaction.response.send_message(f"❗ {상대.display_name} 님은 게임을 시작하지 않았습니다!")
-        return
-    
-    # 같은 서버 데이터 사용 (이미 서버별로 분리됨)
     attacker_data = server_data[attacker_uid]
-    defender_data = server_data[defender_uid]
-    
-    # 하루 결투 횟수 체크
-    reset_daily_duel_count(server_id, defender_uid)
-    defender_data = server_data[defender_uid]
-    
-    if defender_data.get("duel_count_today", 0) >= 10:
-        await interaction.response.send_message(f"❗ {상대.display_name} 님은 오늘 이미 10번의 결투를 받았습니다!")
-        return
     attacker_level = attacker_data.get("sword_level", 0)
-    defender_level = defender_data.get("sword_level", 0)
     
     if attacker_level == 0:
         await interaction.response.send_message("❗ 0레벨 검으로는 결투할 수 없습니다!")
         return
     
-    if defender_level == 0:
-        await interaction.response.send_message(f"❗ {상대.display_name} 님의 검 레벨이 0입니다!")
+    # 허수아비 모드 체크
+    is_dummy = False
+    defender_data = None
+    defender_name = ""
+    defender_uid = None
+    
+    # "허수아비" 문자열 체크
+    if 상대.lower() in ["허수아비", "허수아비 ", " 허수아비", "허수아비와", "허수아비와 결투"]:
+        is_dummy = True
+        defender_data = create_dummy_opponent(attacker_level)
+        defender_name = "허수아비"
+    else:
+        # 멘션 파싱 시도
+        try:
+            # <@123456789> 형식에서 ID 추출
+            import re
+            mention_match = re.search(r'<@!?(\d+)>', 상대)
+            if mention_match:
+                defender_uid = mention_match.group(1)
+                defender_member = await interaction.guild.fetch_member(int(defender_uid))
+            else:
+                # 숫자만 있는 경우
+                if 상대.isdigit():
+                    defender_uid = 상대
+                    defender_member = await interaction.guild.fetch_member(int(defender_uid))
+                else:
+                    await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 '허수아비'를 입력하세요.")
+                    return
+        except:
+            await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 '허수아비'를 입력하세요.")
+            return
+        
+        if attacker_uid == defender_uid:
+            await interaction.response.send_message("❗ 자신과는 결투할 수 없습니다!")
+            return
+        
+        if defender_uid not in server_data:
+            await interaction.response.send_message(f"❗ {defender_member.display_name} 님은 게임을 시작하지 않았습니다!")
+            return
+        
+        defender_data = server_data[defender_uid]
+        defender_name = defender_member.display_name
+        
+        # 하루 결투 횟수 체크 (허수아비는 제한 없음)
+        reset_daily_duel_count(server_id, defender_uid)
+        defender_data = server_data[defender_uid]
+        
+        if defender_data.get("duel_count_today", 0) >= 10:
+            await interaction.response.send_message(f"❗ {defender_name} 님은 오늘 이미 10번의 결투를 받았습니다!")
+            return
+    
+    defender_level = defender_data.get("sword_level", 0)
+    
+    if not is_dummy and defender_level == 0:
+        await interaction.response.send_message(f"❗ {defender_name} 님의 검 레벨이 0입니다!")
         return
     
     # 결투 진행
@@ -1161,12 +1217,19 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
     defender_sword_name = get_sword_name(defender_level, defender_attribute if defender_attribute != "없음" else None)
     
     attacker_name = interaction.user.display_name
-    defender_name = 상대.display_name
     
     embed = discord.Embed(
         title="⚔️ 결투 결과",
         color=discord.Color.purple()
     )
+    
+    # 허수아비 정보 표시
+    if is_dummy:
+        embed.add_field(
+            name="🎯 허수아비와의 결투",
+            value=f"레벨 {defender_level} | {defender_attribute} 속성 | {defender_data.get('gold', 0):,} 골드",
+            inline=False
+        )
     
     # 스토리 생성을 위한 정보 준비
     winner_name = ""
@@ -1174,47 +1237,80 @@ async def 결투(interaction: discord.Interaction, 상대: discord.Member):
     
     if roll < win_rate:
         # 공격자 승리
-        stolen_gold = calculate_duel_gold(attacker_level, defender_level, defender_data.get("gold", 0))
-        attacker_data["gold"] = attacker_data.get("gold", 0) + stolen_gold
-        defender_data["gold"] = max(0, defender_data.get("gold", 0) - stolen_gold)
         winner_name = attacker_name
         
-        embed.add_field(
-            name="✅ 승리!",
-            value=f"{attacker_name} 님이 승리했습니다!",
-            inline=False
-        )
-        embed.add_field(
-            name="💰 획득 골드",
-            value=f"{stolen_gold:,} 골드를 획득했습니다!",
-            inline=False
-        )
+        if is_dummy:
+            # 허수아비와의 결투: 골드 변동 없음
+            embed.add_field(
+                name="✅ 승리!",
+                value=f"{attacker_name} 님이 허수아비를 물리쳤습니다!",
+                inline=False
+            )
+            embed.add_field(
+                name="💡 연습 결투",
+                value="허수아비와의 결투에서는 골드를 획득하거나 잃지 않습니다.",
+                inline=False
+            )
+            stolen_gold = 0  # 스토리용 (표시 안 함)
+        else:
+            # 실제 유저와의 결투: 골드 변동 있음
+            stolen_gold = calculate_duel_gold(attacker_level, defender_level, defender_data.get("gold", 0))
+            attacker_data["gold"] = attacker_data.get("gold", 0) + stolen_gold
+            defender_data["gold"] = max(0, defender_data.get("gold", 0) - stolen_gold)
+            
+            embed.add_field(
+                name="✅ 승리!",
+                value=f"{attacker_name} 님이 승리했습니다!",
+                inline=False
+            )
+            embed.add_field(
+                name="💰 획득 골드",
+                value=f"{stolen_gold:,} 골드를 획득했습니다!",
+                inline=False
+            )
         embed.color = discord.Color.green()
     else:
         # 방어자 승리
-        stolen_gold = calculate_duel_gold(defender_level, attacker_level, attacker_data.get("gold", 0))
-        defender_data["gold"] = defender_data.get("gold", 0) + stolen_gold
-        attacker_data["gold"] = max(0, attacker_data.get("gold", 0) - stolen_gold)
         winner_name = defender_name
         
-        embed.add_field(
-            name="❌ 패배...",
-            value=f"{defender_name} 님이 승리했습니다!",
-            inline=False
-        )
-        embed.add_field(
-            name="💰 손실 골드",
-            value=f"{stolen_gold:,} 골드를 잃었습니다...",
-            inline=False
-        )
+        if is_dummy:
+            # 허수아비와의 결투: 골드 변동 없음
+            embed.add_field(
+                name="❌ 패배...",
+                value=f"{attacker_name} 님이 허수아비에게 패배했습니다!",
+                inline=False
+            )
+            embed.add_field(
+                name="💡 연습 결투",
+                value="허수아비와의 결투에서는 골드를 획득하거나 잃지 않습니다.",
+                inline=False
+            )
+            stolen_gold = 0  # 스토리용 (표시 안 함)
+        else:
+            # 실제 유저와의 결투: 골드 변동 있음
+            stolen_gold = calculate_duel_gold(defender_level, attacker_level, attacker_data.get("gold", 0))
+            attacker_data["gold"] = max(0, attacker_data.get("gold", 0) - stolen_gold)
+            defender_data["gold"] = defender_data.get("gold", 0) + stolen_gold
+            
+            embed.add_field(
+                name="❌ 패배...",
+                value=f"{defender_name} 님이 승리했습니다!",
+                inline=False
+            )
+            embed.add_field(
+                name="💰 손실 골드",
+                value=f"{stolen_gold:,} 골드를 잃었습니다...",
+                inline=False
+            )
         embed.color = discord.Color.red()
     
-    # 결투 횟수 증가
-    defender_data["duel_count_today"] = defender_data.get("duel_count_today", 0) + 1
-    defender_data["last_duel_date"] = str(datetime.now(KST).date())
+    # 허수아비가 아닌 경우에만 결투 횟수 증가 및 저장
+    if not is_dummy:
+        defender_data["duel_count_today"] = defender_data.get("duel_count_today", 0) + 1
+        defender_data["last_duel_date"] = str(datetime.now(KST).date())
+        server_data[defender_uid] = defender_data
     
     server_data[attacker_uid] = attacker_data
-    server_data[defender_uid] = defender_data
     save_sword_data(server_id, server_data)
     
     # 스토리 생성 (비동기)
