@@ -689,14 +689,17 @@ def get_enhancement_fail_image_url(fail_type="maintain"):
     fail_type: "maintain" (레벨 유지) 또는 "downgrade" (레벨 하락)
     """
     # ========== 여기에 실패 이미지 URL을 설정하세요 ==========
+    # 방법 1: base_url 사용 (GitHub 레포의 img 폴더 사용 시) - 추천
+    # GitHub 저장소의 img 폴더에 이미지를 업로드한 후 아래 형식으로 설정
+    # 형식: https://raw.githubusercontent.com/사용자명/저장소명/브랜치명/img/
+    base_url = "https://raw.githubusercontent.com/kimgm1018/sangbot/main/img/"
+    
+    # 방법 2: 직접 URL 입력
     # 강화 실패 이미지 URL (None이면 이미지 표시 안 함)
     FAIL_IMAGES = {
-        "maintain": "https://ibb.co/j9bsz9pJ",      # 레벨 유지 실패 이미지
-        "downgrade": "https://ibb.co/d4PDHMFC",     # 레벨 하락 실패 이미지
+        "maintain" : "enhancement_fail_maintain.png",      # 레벨 유지 실패 이미지 URL
+        "downgrade": "enhancement_fail_downgrade.png",     # 레벨 하락 실패 이미지 URL
     }
-    
-    # 또는 자동 생성 방식 (base_url 설정 시)
-    base_url = None  # 예: "https://your-image-host.com/swords/fail/"
     
     # ====================================================
     
