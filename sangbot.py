@@ -691,7 +691,7 @@ def get_enhancement_fail_image_url(fail_type="maintain"):
     # ========== 여기에 실패 이미지 URL을 설정하세요 ==========
     # 강화 실패 이미지 URL (None이면 이미지 표시 안 함)
     FAIL_IMAGES = {
-        "maintain": :"https://ibb.co/j9bsz9pJ",      # 레벨 유지 실패 이미지
+        "maintain": "https://ibb.co/j9bsz9pJ",      # 레벨 유지 실패 이미지
         "downgrade": "https://ibb.co/d4PDHMFC",     # 레벨 하락 실패 이미지
     }
     
