@@ -342,12 +342,12 @@ def get_enhancement_rate(current_level):
         6: 65,    # 6->7: 65%
         7: 60,    # 7->8: 60%
         8: 50,    # 8->9: 55%
-        9: 40,    # 9->10: 50%
-        10: 30,   # 10->11: 45%
-        11: 20,   # 11->12: 40%
-        12: 10,   # 12->13: 35%
-        13: 5,   # 13->14: 30%
-        14: 3     # 14->15: 4%
+        9: 45,    # 9->10: 50%
+        10: 40,   # 10->11: 45%
+        11: 35,   # 11->12: 40%
+        12: 30,   # 12->13: 35%
+        13: 20,   # 13->14: 30%
+        14: 10     # 14->15: 4%
     }
     return rates.get(current_level, 0)
 
@@ -682,6 +682,30 @@ def get_sword_image_url(level, attribute=None):
     # 딕셔너리에서 직접 가져오기
     return SWORD_IMAGES.get(level, None)
 
+# 강화 성공 이미지 URL 반환
+def get_enhancement_success_image_url():
+    """
+    강화 성공 시 표시할 이미지 URL 반환
+    """
+    # ========== 여기에 성공 이미지 URL을 설정하세요 ==========
+    # 방법 1: base_url 사용 (GitHub 레포의 img 폴더 사용 시) - 추천
+    # GitHub 저장소의 img 폴더에 이미지를 업로드한 후 아래 형식으로 설정
+    # 형식: https://raw.githubusercontent.com/사용자명/저장소명/브랜치명/img/
+    base_url = "https://raw.githubusercontent.com/kimgm1018/sangbot/main/img/"
+    
+    # 방법 2: 직접 URL 입력
+    # 강화 성공 이미지 URL (None이면 이미지 표시 안 함)
+    success_image = "enhancement_success.png"  # enhancement_success.png (오타 주의)
+    
+    # ====================================================
+    
+    # base_url이 설정되어 있으면 자동 생성
+    if base_url:
+        return f"{base_url}enhancement_success.png"
+    
+    # 직접 URL 반환
+    return success_image if success_image else None
+
 # 강화 실패 이미지 URL 반환
 def get_enhancement_fail_image_url(fail_type="maintain"):
     """
@@ -715,29 +739,46 @@ def get_enhancement_fail_image_url(fail_type="maintain"):
 
 # 강화 비용 계산
 def get_enhancement_cost(current_level):
-    if current_level == 0:
-        return 10  # 0->1: 10골드
-    elif current_level == 14:
-        return 100000  # 14->15: 10만골드
-    else:
-        # 0->1은 10골, 14->15는 10만골 사이를 지수적으로 증가
-        base = 10
-        target = 100000
-        return int(base * ((target / base) ** (current_level / 14)))
+    costs = {
+        0: 10,        # 0->1: 10골드
+        1: 40,        # 1->2: 40골드
+        2: 80,        # 2->3: 80골드
+        3: 200,       # 3->4: 200골드
+        4: 500,       # 4->5: 500골드
+        5: 1200,      # 5->6: 1,200골드
+        6: 3000,      # 6->7: 3,000골드
+        7: 5000,      # 7->8: 5,000골드
+        8: 8000,      # 8->9: 8,000골드
+        9: 12000,     # 9->10: 12,000골드
+        10: 18000,    # 10->11: 18,000골드
+        11: 25000,    # 11->12: 25,000골드
+        12: 32000,    # 12->13: 32,000골드
+        13: 40000,    # 13->14: 40,000골드
+        14: 50000     # 14->15: 50,000골드
+    }
+    return costs.get(current_level, 0)
 
 # 검 판매 가격 계산
 def get_sword_price(level):
-    if level == 0:
-        return 0
-    elif level == 1:
-        return 50
-    elif level == 15:
-        return 700000
-    else:
-        # 1레벨 50골, 15레벨 70만골 사이를 지수적으로 증가
-        base = 50
-        target = 700000
-        return int(base * ((target / base) ** ((level - 1) / 14)))
+    prices = {
+        0: 0,         # 0레벨: 0골드
+        1: 40,        # 1레벨: 40골드
+        2: 120,       # 2레벨: 120골드
+        3: 300,       # 3레벨: 300골드
+        4: 800,       # 4레벨: 800골드
+        5: 2000,      # 5레벨: 2,000골드
+        6: 5000,      # 6레벨: 5,000골드
+        7: 7000,     # 7레벨: 12,000골드
+        8: 12000,     # 8레벨: 28,000골드
+        9: 20000,     # 9레벨: 60,000골드
+        10: 35000,   # 10레벨: 120,000골드
+        11: 50000,   # 11레벨: 160,000골드
+        12: 75000,   # 12레벨: 200,000골드
+        13: 150000,   # 13레벨: 230,000골드
+        14: 400000,   # 14레벨: 260,000골드
+        15: 600000    # 15레벨: 280,000골드
+    }
+    return prices.get(level, 0)
 
 # 결투 승률 계산 (레벨 차이 기반)
 def calculate_duel_win_rate(attacker_level, defender_level):
@@ -912,11 +953,18 @@ async def 강화(interaction: discord.Interaction):
         new_level = current_level + 1
         user_data["sword_level"] = new_level
         
-        # 강화 성공 시 새로운 레벨의 이미지 표시
+        # 현재 속성 가져오기 (0->1 강화 전)
         new_attribute = user_data.get("sword_attribute")
-        sword_image = get_sword_image_url(new_level, new_attribute)
-        if sword_image:
-            embed.set_image(url=sword_image)
+        
+        # 강화 성공 시 성공 이미지 표시
+        success_image = get_enhancement_success_image_url()
+        if success_image:
+            embed.set_image(url=success_image)
+        else:
+            # 성공 이미지가 없으면 새로운 레벨의 검 이미지 표시
+            sword_image = get_sword_image_url(new_level, new_attribute)
+            if sword_image:
+                embed.set_image(url=sword_image)
         
         # 0->1 강화 시 속성 부여
         if current_level == 0 and new_level == 1:
