@@ -193,7 +193,7 @@ duel_story_prompt = PromptTemplate(
 3. 레벨 차이에 따라 전투의 난이도와 긴장감을 표현하세요.
 4. 승리자가 어떻게 승리했는지 구체적으로 묘사하세요.
 5. 마지막에 "{winner_name}이(가) 승리했다!"라는 결론을 포함하세요.
-6. 스토리는 3줄에서 4줄 정도로 작성하세요.
+6. 스토리는 5줄 정도로 작성하세요.
 7. 이모지나 특수문자는 사용하지 마세요.
 
 스토리를 작성해주세요:
@@ -309,6 +309,7 @@ async def 랭킹(interaction: discord.Interaction):
 # ==================== 검 키우기 게임 ====================
 
 SWORD_FILE_PREFIX = "sword_data_"  # 서버별 파일: sword_data_{server_id}.json
+ATTENDANCE_FILE_PREFIX = "attendance_data_"  # 서버별 출석 파일: attendance_data_{server_id}.json
 SWORD_ATTRIBUTES = ["빛", "어둠", "피", "자연", "마"]
 
 # 서버별 검 게임 데이터 로딩/저장 함수
@@ -327,6 +328,25 @@ def load_sword_data(server_id):
 def save_sword_data(server_id, data):
     """특정 서버의 검 게임 데이터 저장"""
     file_path = get_sword_file_path(server_id)
+    with open(file_path, "w", encoding="utf-8") as f:
+        json.dump(data, f, ensure_ascii=False, indent=2)
+
+# 출석 데이터 로딩/저장 함수
+def get_attendance_file_path(server_id):
+    """서버 ID에 따른 출석 데이터 파일 경로 반환"""
+    return f"{ATTENDANCE_FILE_PREFIX}{server_id}.json"
+
+def load_attendance_data(server_id):
+    """특정 서버의 출석 데이터 로드"""
+    file_path = get_attendance_file_path(server_id)
+    if os.path.exists(file_path):
+        with open(file_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    return {}
+
+def save_attendance_data(server_id, data):
+    """특정 서버의 출석 데이터 저장"""
+    file_path = get_attendance_file_path(server_id)
     with open(file_path, "w", encoding="utf-8") as f:
         json.dump(data, f, ensure_ascii=False, indent=2)
 
@@ -358,7 +378,7 @@ def get_maintain_rate(current_level):
     elif current_level <= 10:
         return 40  # 중간 레벨은 10%
     else:
-        return 10  # 높은 레벨은 15%
+        return 15  # 높은 레벨은 15%
 
 # 강화 멘트 반환 함수
 def get_enhancement_message(current_level, new_level, attribute):
@@ -812,6 +832,54 @@ def calculate_duel_gold(winner_level, loser_level, loser_gold):
     
     return int(loser_gold * steal_rate)
 
+# 유저 찾기 헬퍼 함수 (멘션, ID, 닉네임 지원)
+async def find_user_by_input(guild, user_input):
+    """
+    멘션, ID, 또는 닉네임으로 유저를 찾는 함수
+    Returns: (member, user_id) 또는 (None, None)
+    """
+    import re
+    
+    # 1. 멘션 형식 체크 (<@123456789> 또는 <@!123456789>)
+    mention_match = re.search(r'<@!?(\d+)>', user_input)
+    if mention_match:
+        user_id = mention_match.group(1)
+        try:
+            member = await guild.fetch_member(int(user_id))
+            return member, user_id
+        except:
+            return None, None
+    
+    # 2. 숫자만 있는 경우 (ID로 인식)
+    if user_input.isdigit():
+        try:
+            member = await guild.fetch_member(int(user_input))
+            return member, user_input
+        except:
+            return None, None
+    
+    # 3. 닉네임으로 검색
+    # display_name (서버 닉네임) 또는 name (사용자명)으로 검색
+    user_input_lower = user_input.lower()
+    
+    # 정확히 일치하는 경우 우선
+    for member in guild.members:
+        if member.display_name.lower() == user_input_lower or member.name.lower() == user_input_lower:
+            return member, str(member.id)
+    
+    # 부분 일치 검색
+    matches = []
+    for member in guild.members:
+        if user_input_lower in member.display_name.lower() or user_input_lower in member.name.lower():
+            matches.append((member, str(member.id)))
+    
+    # 하나만 일치하면 반환
+    if len(matches) == 1:
+        return matches[0]
+    
+    # 여러 개 일치하면 None 반환 (명확하지 않음)
+    return None, None
+
 # 서버의 왕(15레벨) 찾기
 def find_king(server_id):
     """특정 서버의 왕(15레벨) 찾기"""
@@ -848,7 +916,7 @@ async def 검시작(interaction: discord.Interaction):
         return
     
     server_data[uid] = {
-        "gold": 100000,
+        "gold": 200000,
         "sword_level": 0,
         "sword_attribute": None,
         "duel_count_today": 0,
@@ -861,7 +929,7 @@ async def 검시작(interaction: discord.Interaction):
         description=f"{interaction.user.display_name} 님이 게임을 시작했습니다!",
         color=discord.Color.gold()
     )
-    embed.add_field(name="💰 시작 골드", value="100,000 골드", inline=False)
+    embed.add_field(name="💰 시작 골드", value="200,000 골드", inline=False)
     embed.add_field(name="⚔️ 검 레벨", value="0 레벨 (속성 없음)", inline=False)
     embed.add_field(name="💡 다음 단계", value="`/강화` 명령어로 검을 강화하세요!", inline=False)
     
@@ -1193,10 +1261,6 @@ async def 결투(interaction: discord.Interaction, 상대: str):
     attacker_data = server_data[attacker_uid]
     attacker_level = attacker_data.get("sword_level", 0)
     
-    if attacker_level == 0:
-        await interaction.response.send_message("❗ 0레벨 검으로는 결투할 수 없습니다!")
-        return
-    
     # 허수아비 모드 체크
     is_dummy = False
     defender_data = None
@@ -1206,27 +1270,20 @@ async def 결투(interaction: discord.Interaction, 상대: str):
     # "허수아비" 문자열 체크
     if 상대.lower() in ["허수아비", "허수아비 ", " 허수아비", "허수아비와", "허수아비와 결투"]:
         is_dummy = True
+        # 허수아비는 0레벨이어도 결투 가능 (연습 상대)
+        # create_dummy_opponent 함수 내부에서 최소 1레벨로 생성됨
         defender_data = create_dummy_opponent(attacker_level)
         defender_name = "허수아비"
     else:
-        # 멘션 파싱 시도
-        try:
-            # <@123456789> 형식에서 ID 추출
-            import re
-            mention_match = re.search(r'<@!?(\d+)>', 상대)
-            if mention_match:
-                defender_uid = mention_match.group(1)
-                defender_member = await interaction.guild.fetch_member(int(defender_uid))
-            else:
-                # 숫자만 있는 경우
-                if 상대.isdigit():
-                    defender_uid = 상대
-                    defender_member = await interaction.guild.fetch_member(int(defender_uid))
-                else:
-                    await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 '허수아비'를 입력하세요.")
-                    return
-        except:
-            await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 '허수아비'를 입력하세요.")
+        # 유저 찾기 (멘션, ID, 닉네임 지원)
+        defender_member, defender_uid = await find_user_by_input(interaction.guild, 상대)
+        if defender_member is None or defender_uid is None:
+            await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 닉네임을 입력하세요. (또는 '허수아비' 입력)")
+            return
+        
+        # 실제 유저와의 결투는 0레벨 불가
+        if attacker_level == 0:
+            await interaction.response.send_message("❗ 0레벨 검으로는 다른 유저와 결투할 수 없습니다! 허수아비와 연습하세요.")
             return
         
         if attacker_uid == defender_uid:
@@ -1240,6 +1297,12 @@ async def 결투(interaction: discord.Interaction, 상대: str):
         defender_data = server_data[defender_uid]
         defender_name = defender_member.display_name
         
+        # 방어자 레벨 체크 (0레벨이면 결투 불가)
+        defender_level = defender_data.get("sword_level", 0)
+        if defender_level == 0:
+            await interaction.response.send_message(f"❗ {defender_name} 님의 검 레벨이 0입니다! 0레벨 검으로는 결투할 수 없습니다.")
+            return
+        
         # 하루 결투 횟수 체크 (허수아비는 제한 없음)
         reset_daily_duel_count(server_id, defender_uid)
         defender_data = server_data[defender_uid]
@@ -1250,9 +1313,12 @@ async def 결투(interaction: discord.Interaction, 상대: str):
     
     defender_level = defender_data.get("sword_level", 0)
     
-    if not is_dummy and defender_level == 0:
-        await interaction.response.send_message(f"❗ {defender_name} 님의 검 레벨이 0입니다!")
-        return
+    # 레벨 차이 체크 (3랩 이상 차이면 결투 불가)
+    if not is_dummy:
+        level_diff = abs(attacker_level - defender_level)
+        if level_diff >= 3:
+            await interaction.response.send_message(f"❗ 레벨 차이가 3랩 이상이면 결투할 수 없습니다! (공격자: {attacker_level}레벨, 방어자: {defender_level}레벨)")
+            return
     
     # 결투 진행
     win_rate = calculate_duel_win_rate(attacker_level, defender_level)
@@ -1440,6 +1506,129 @@ async def 검랭킹(interaction: discord.Interaction):
     
     await interaction.response.send_message(embed=embed)
 
+# 송금 명령어
+@bot.tree.command(name="송금", description="다른 유저에게 골드를 송금합니다")
+@app_commands.describe(대상="송금할 상대를 멘션하거나 닉네임을 입력하세요", 금액="송금할 골드 금액 (최소 1,000골드)")
+async def 송금(interaction: discord.Interaction, 대상: str, 금액: int):
+    sender_uid = str(interaction.user.id)
+    server_id = interaction.guild.id
+    
+    server_data = load_sword_data(server_id)
+    
+    # 송금자 확인
+    if sender_uid not in server_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    sender_data = server_data[sender_uid]
+    sender_gold = sender_data.get("gold", 0)
+    
+    # 최소 금액 체크
+    if 금액 < 1000:
+        await interaction.response.send_message("❗ 송금은 최소 1,000골드부터 가능합니다!")
+        return
+    
+    # 골드 부족 체크
+    if sender_gold < 금액:
+        await interaction.response.send_message(f"❗ 골드가 부족합니다! 보유 골드: {sender_gold:,}골드, 필요 골드: {금액:,}골드")
+        return
+    
+    # 수신자 찾기
+    receiver_member, receiver_uid = await find_user_by_input(interaction.guild, 대상)
+    if receiver_member is None or receiver_uid is None:
+        await interaction.response.send_message("❗ 올바른 상대를 멘션하거나 닉네임을 입력하세요.")
+        return
+    
+    # 자신에게 송금 불가
+    if sender_uid == receiver_uid:
+        await interaction.response.send_message("❗ 자신에게는 송금할 수 없습니다!")
+        return
+    
+    # 수신자 게임 시작 여부 확인
+    if receiver_uid not in server_data:
+        await interaction.response.send_message(f"❗ {receiver_member.display_name} 님은 게임을 시작하지 않았습니다!")
+        return
+    
+    receiver_data = server_data[receiver_uid]
+    
+    # 송금 처리
+    sender_data["gold"] = sender_gold - 금액
+    receiver_data["gold"] = receiver_data.get("gold", 0) + 금액
+    
+    server_data[sender_uid] = sender_data
+    server_data[receiver_uid] = receiver_data
+    save_sword_data(server_id, server_data)
+    
+    embed = discord.Embed(
+        title="💰 송금 완료",
+        description=f"{interaction.user.display_name} 님이 {receiver_member.display_name} 님에게 송금했습니다!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="💰 송금 금액", value=f"{금액:,} 골드", inline=False)
+    embed.add_field(name="💰 송금자 잔액", value=f"{sender_data['gold']:,} 골드", inline=True)
+    embed.add_field(name="💰 수신자 잔액", value=f"{receiver_data['gold']:,} 골드", inline=True)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 출석 명령어
+@bot.tree.command(name="출석", description="출석하고 5만골드를 받습니다")
+async def 출석(interaction: discord.Interaction):
+    uid = str(interaction.user.id)
+    server_id = interaction.guild.id
+    
+    # 검 게임 데이터 확인
+    server_data = load_sword_data(server_id)
+    if uid not in server_data:
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        return
+    
+    # 출석 데이터 확인
+    attendance_data = load_attendance_data(server_id)
+    today = str(datetime.now(KST).date())
+    
+    # 오늘 이미 출석했는지 확인
+    if uid in attendance_data and attendance_data[uid].get("last_attendance_date") == today:
+        await interaction.response.send_message("❗ 오늘은 이미 출석했습니다! 내일 다시 시도해주세요.")
+        return
+    
+    # 출석 처리
+    attendance_data[uid] = {
+        "last_attendance_date": today
+    }
+    save_attendance_data(server_id, attendance_data)
+    
+    # 골드 지급
+    user_data = server_data[uid]
+    user_data["gold"] = user_data.get("gold", 0) + 50000
+    server_data[uid] = user_data
+    save_sword_data(server_id, server_data)
+    
+    embed = discord.Embed(
+        title="✅ 출석 완료!",
+        description=f"{interaction.user.display_name} 님이 출석했습니다!",
+        color=discord.Color.green()
+    )
+    embed.add_field(name="💰 획득 골드", value="50,000 골드", inline=False)
+    embed.add_field(name="💰 현재 골드", value=f"{user_data['gold']:,} 골드", inline=False)
+    
+    await interaction.response.send_message(embed=embed)
+
+# 출석 초기화 태스크 (자정)
+@tasks.loop(minutes=1)
+async def reset_attendance():
+    """매일 자정에 출석 데이터 초기화"""
+    now = datetime.now(KST)
+    if now.hour == 0 and now.minute == 0:
+        # 모든 출석 파일 찾기
+        import glob
+        attendance_files = glob.glob(f"{ATTENDANCE_FILE_PREFIX}*.json")
+        for file_path in attendance_files:
+            try:
+                # 파일 삭제 (또는 빈 딕셔너리로 초기화)
+                with open(file_path, "w", encoding="utf-8") as f:
+                    json.dump({}, f, ensure_ascii=False, indent=2)
+            except Exception as e:
+                print(f"출석 초기화 오류 ({file_path}): {e}")
 
 # 뉴스 루프
 @tasks.loop(minutes=1)
@@ -1474,7 +1663,8 @@ async def on_ready():
         print("명령어 등록 실패:", e)
     # check_events.start()
     # clean_old_events.start()
-    daily_report.start() 
+    daily_report.start()
+    reset_attendance.start() 
     
 bot.run(token)
 
