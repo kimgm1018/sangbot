@@ -804,19 +804,19 @@ def get_sword_price(level):
 def calculate_duel_win_rate(attacker_level, defender_level):
     level_diff = attacker_level - defender_level
     if level_diff >= 5:
-        return 0.95  # 5레벨 이상 차이면 95%
+        return 0.95  # 공격자가 5레벨 이상 높으면 95%
     elif level_diff >= 3:
-        return 0.85  # 3레벨 이상 차이면 85%
+        return 0.85  # 공격자가 3~4레벨 높으면 85%
     elif level_diff >= 1:
-        return 0.70  # 1레벨 이상 차이면 70%
+        return 0.70  # 공격자가 1~2레벨 높으면 70%
     elif level_diff == 0:
         return 0.50  # 같은 레벨이면 50%
-    elif level_diff >= -1:
-        return 0.30  # 1레벨 낮으면 30%
-    elif level_diff >= -3:
-        return 0.15  # 3레벨 낮으면 15%
+    elif level_diff >= -2:
+        return 0.30  # 공격자가 1~2레벨 낮으면 30%
+    elif level_diff >= -4:
+        return 0.15  # 공격자가 3~4레벨 낮으면 15%
     else:
-        return 0.05  # 5레벨 이상 낮으면 5%
+        return 0.05  # 공격자가 5레벨 이상 낮으면 5%
 
 # 결투 골드 획득량 계산
 def calculate_duel_gold(winner_level, loser_level, loser_gold):
@@ -1651,6 +1651,26 @@ async def 뉴스(ctx):
         await ctx.send(result.content)  # 현재 명령어 친 채널로 전송
     else:
         await ctx.send("어제 기록이 없습니다.")
+
+# 명령어 수동 동기화 명령어 (관리자용)
+@bot.tree.command(name="명령어동기화", description="슬래시 명령어를 즉시 동기화합니다 (관리자 전용)")
+async def 명령어동기화(interaction: discord.Interaction):
+    # 관리자 권한 확인
+    if not interaction.user.guild_permissions.administrator:
+        await interaction.response.send_message("❗ 이 명령어는 관리자만 사용할 수 있습니다.", ephemeral=True)
+        return
+    
+    await interaction.response.defer(ephemeral=True)
+    
+    try:
+        # 현재 서버에 즉시 동기화
+        synced = await bot.tree.sync(guild=interaction.guild)
+        await interaction.followup.send(
+            f"✅ 명령어 동기화 완료!\n등록된 명령어: {[cmd.name for cmd in synced]}\n총 {len(synced)}개",
+            ephemeral=True
+        )
+    except Exception as e:
+        await interaction.followup.send(f"❌ 동기화 실패: {e}", ephemeral=True)
 
 # 봇 준비되면 슬래시 명령어 서버에 등록
 @bot.event
