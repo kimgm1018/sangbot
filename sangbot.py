@@ -1571,15 +1571,15 @@ async def 송금(interaction: discord.Interaction, 대상: str, 금액: int):
     await interaction.response.send_message(embed=embed)
 
 # 출석 명령어
-@bot.tree.command(name="출석", description="출석하고 5만골드를 받습니다")
-async def 출석(interaction: discord.Interaction):
+@bot.tree.command(name="검출석", description="출석하고 5만골드를 받습니다")
+async def 검출석(interaction: discord.Interaction):
     uid = str(interaction.user.id)
     server_id = interaction.guild.id
     
     # 검 게임 데이터 확인
     server_data = load_sword_data(server_id)
     if uid not in server_data:
-        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.")
+        await interaction.response.send_message("❗ 게임을 시작하지 않았습니다! `/검시작` 명령어로 게임을 시작하세요.", ephemeral=True)
         return
     
     # 출석 데이터 확인
@@ -1588,7 +1588,7 @@ async def 출석(interaction: discord.Interaction):
     
     # 오늘 이미 출석했는지 확인
     if uid in attendance_data and attendance_data[uid].get("last_attendance_date") == today:
-        await interaction.response.send_message("❗ 오늘은 이미 출석했습니다! 내일 다시 시도해주세요.")
+        await interaction.response.send_message("❗ 오늘은 이미 출석했습니다! 내일 다시 시도해주세요.", ephemeral=True)
         return
     
     # 출석 처리
