@@ -1657,10 +1657,22 @@ async def 뉴스(ctx):
 async def on_ready():
     print(f"{bot.user} online")
     try:
+        # 글로벌 명령어 동기화 (최대 1시간 소요)
         synced = await bot.tree.sync()
-        print(f"✅ 등록된 명령어: {[cmd.name for cmd in synced]}")
+        print(f"✅ 글로벌 명령어 등록: {[cmd.name for cmd in synced]}")
+        print(f"✅ 총 {len(synced)}개의 글로벌 명령어가 등록되었습니다.")
+        
+        # 봇이 있는 모든 서버에 즉시 동기화 (개발/테스트용)
+        for guild in bot.guilds:
+            try:
+                synced_guild = await bot.tree.sync(guild=guild)
+                print(f"✅ 서버 '{guild.name}' ({guild.id})에 {len(synced_guild)}개 명령어 즉시 등록")
+            except Exception as e:
+                print(f"⚠️ 서버 '{guild.name}' 동기화 실패: {e}")
     except Exception as e:
         print("명령어 등록 실패:", e)
+        import traceback
+        traceback.print_exc()
     # check_events.start()
     # clean_old_events.start()
     daily_report.start()
