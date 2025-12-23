@@ -1316,8 +1316,8 @@ async def 결투(interaction: discord.Interaction, 상대: str):
     # 레벨 차이 체크 (3랩 이상 차이면 결투 불가)
     if not is_dummy:
         level_diff = abs(attacker_level - defender_level)
-        if level_diff >= 3:
-            await interaction.response.send_message(f"❗ 레벨 차이가 3랩 이상이면 결투할 수 없습니다! (공격자: {attacker_level}레벨, 방어자: {defender_level}레벨)")
+        if level_diff >= 4:
+            await interaction.response.send_message(f"❗ 레벨 차이가 4랩 이상이면 결투할 수 없습니다! (공격자: {attacker_level}레벨, 방어자: {defender_level}레벨)")
             return
     
     # 결투 진행
