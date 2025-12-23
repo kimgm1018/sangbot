@@ -823,12 +823,12 @@ def calculate_duel_gold(winner_level, loser_level, loser_gold):
     level_diff = winner_level - loser_level
     if level_diff > 0:
         # 레벨이 높은 사람이 이긴 경우: 소량
-        steal_rate = 0.05 + (level_diff * 0.01)  # 5% + 레벨차이당 1%
+        steal_rate = 0.05 + (level_diff * 0.03)  # 5% + 레벨차이당 3%
         steal_rate = min(steal_rate, 0.15)  # 최대 15%
     else:
         # 레벨이 낮은 사람이 이긴 경우: 많은 양
-        steal_rate = 0.20 + (abs(level_diff) * 0.05)  # 20% + 레벨차이당 5%
-        steal_rate = min(steal_rate, 0.40)  # 최대 50%
+        steal_rate = 0.18 + (abs(level_diff) * 0.05)  # 18% + 레벨차이당 5%
+        steal_rate = min(steal_rate, 0.30)  # 최대 30%
     
     return int(loser_gold * steal_rate)
 
